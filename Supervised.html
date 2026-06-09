@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="An interactive educational playground for classic machine learning classifiers.">
+  <title>Interactive Classification Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="classic.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <div class="eyebrow"><span class="pulse-dot"></span> Interactive ML Lab</div>
+        <h1>Interactive Classification Playground</h1>
+        <p>Compare k-NN, Trees, Logistic Regression, linear and RBF SVMs, neural networks, Naive Bayes, LDA, and Perceptron.</p>
+      </div>
+      <div class="hero-actions">
+        <a class="app-switch" href="neural.html">Neural playground →</a>
+        <a class="app-switch" href="clustering.html">Clustering →</a>
+        <a class="app-switch" href="index.html">← Ensemble models</a>
+        <div class="hero-badge" aria-label="Current model">
+          <span>Now exploring</span>
+          <strong id="heroModel">k-Nearest Neighbors</strong>
+        </div>
+      </div>
+    </header>
+
+    <nav class="control-bar" aria-label="Model controls">
+      <div class="menu-wrap">
+        <button class="menu-trigger" data-menu="datasetMenu"><span class="menu-icon">D</span><span><small>Dataset</small><b id="datasetLabel">Two moons</b></span><i>⌄</i></button>
+        <div class="popover" id="datasetMenu">
+          <label class="field-label" for="datasetSelect">Choose a dataset</label>
+          <select id="datasetSelect">
+            <option value="students">Students: study hours vs sleep hours</option>
+            <option value="linear">Linear separation</option>
+            <option value="xor">XOR</option>
+            <option value="circles">Circles</option>
+            <option value="moons" selected>Two moons</option>
+            <option value="spiral">Spiral</option>
+            <option value="stripes">Horizontal stripes</option>
+            <option value="outlier">Outlier dataset</option>
+            <option value="noisy">Noisy classification</option>
+            <option value="imbalanced">Imbalanced dataset</option>
+          </select>
+          <p class="hint">Datasets use a fixed seed, so experiments are repeatable.</p>
+          <button class="primary full" id="loadDataset">Load dataset</button>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="menu-trigger" data-menu="modelMenu"><span class="menu-icon">M</span><span><small>Classifier</small><b id="modelLabel">k-Nearest Neighbors</b></span><i>⌄</i></button>
+        <div class="popover" id="modelMenu">
+          <label class="field-label" for="modelSelect">Choose a classifier</label>
+          <select id="modelSelect">
+            <option value="knn" selected>k-Nearest Neighbors</option>
+            <option value="tree">Decision Tree</option>
+            <option value="logistic">Logistic Regression</option>
+            <option value="svm">Linear SVM</option>
+            <option value="rbfsvm">SVM with RBF Kernel</option>
+            <option value="mlp">Multilayer Neural Network</option>
+            <option value="naivebayes">Gaussian Naive Bayes</option>
+            <option value="lda">Linear Discriminant Analysis</option>
+            <option value="perceptron">Perceptron</option>
+          </select>
+          <div class="explain-box" id="modelQuickExplain"></div>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="menu-trigger" data-menu="editingMenu"><span class="menu-icon">E</span><span><small>Editing</small><b id="toolLabel">Add point</b></span><i>⌄</i></button>
+        <div class="popover wide" id="editingMenu">
+          <div class="tool-grid" id="toolButtons">
+            <button class="tool active" data-tool="add">+ Add point</button>
+            <button class="tool blue" data-tool="brush1">● Brush blue</button>
+            <button class="tool red" data-tool="brush0">● Brush red</button>
+            <button class="tool" data-tool="erase">⌫ Eraser brush</button>
+            <button class="tool" data-tool="select">▣ Select region</button>
+          </div>
+          <label class="range-row">Brush radius <b id="brushRadiusValue">24 px</b><input type="range" id="brushRadius" min="8" max="60" value="24"></label>
+          <div class="button-row">
+            <button class="secondary" id="deleteSelected">Delete selected</button>
+            <button class="danger-soft" id="clearData">Clear all data</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="menu-trigger" data-menu="paramsMenu"><span class="menu-icon">P</span><span><small>Parameters</small><b id="paramSummary">k = 7 · distance weighted</b></span><i>⌄</i></button>
+        <div class="popover wide" id="paramsMenu">
+          <div id="parameterFields"></div>
+        </div>
+      </div>
+
+      <div class="menu-wrap">
+        <button class="menu-trigger" data-menu="metricsMenu"><span class="menu-icon">S</span><span><small>Metrics</small><b id="accuracyLabel">Not trained</b></span><i>⌄</i></button>
+        <div class="popover metrics-popover" id="metricsMenu">
+          <div class="metric-grid" id="metricGrid"></div>
+          <div id="metricExtra"></div>
+        </div>
+      </div>
+
+      <button class="train-button" id="trainButton"><span>↻</span> Train / update</button>
+      <button class="reset-button" id="resetDataset" title="Reset current dataset">Reset</button>
+    </nav>
+
+    <main>
+      <section class="workspace-card">
+        <div class="plot-column">
+          <div class="plot-heading">
+            <div>
+              <span class="section-kicker">Decision surface</span>
+              <h2 id="plotTitle">k-Nearest Neighbors on Two moons</h2>
+            </div>
+            <div class="plot-status" id="plotStatus"><span></span> Model trained</div>
+          </div>
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="plotCanvas" aria-label="Interactive decision region plot"></canvas>
+            <div class="canvas-message hidden" id="canvasMessage"></div>
+            <div class="hover-card hidden" id="hoverCard"></div>
+          </div>
+          <div class="legend">
+            <span><i class="dot red-dot"></i> Class 0</span>
+            <span><i class="dot blue-dot"></i> Class 1</span>
+            <span><i class="region red-region"></i> Predicted 0</span>
+            <span><i class="region blue-region"></i> Predicted 1</span>
+            <span><i class="error-mark">×</i> Misclassified</span>
+          </div>
+          <div class="warning hidden" id="trainingWarning"></div>
+        </div>
+
+        <aside class="insight-panel" aria-label="Learning panels">
+          <div class="panel-menu-title">
+            <div><span class="section-kicker">Learning toolkit</span><h2>Explore the model</h2></div>
+            <span class="panel-hint">Open a panel</span>
+          </div>
+
+          <details class="side-dropdown" open>
+            <summary><span><b>How it works</b><small id="insightTitle">Vote with nearby examples</small></span><i>+</i></summary>
+            <div class="dropdown-content">
+              <p class="insight-copy" id="insightText"></p>
+              <div id="modelVisual"></div>
+              <div class="selected-readout" id="selectedReadout">
+                <span class="readout-icon">◎</span>
+                <div><small>Hover over any point</small><p>Inspect how this classifier makes its decision.</p></div>
+              </div>
+            </div>
+          </details>
+
+          <details class="side-dropdown">
+            <summary><span><b>Confusion matrix</b><small>Inspect model errors</small></span><i>+</i></summary>
+            <div class="dropdown-content">
+              <div class="compact-action"><span>Click a cell to highlight points.</span><button class="text-button" id="showAll">Show all</button></div>
+              <div class="matrix-layout">
+                <div class="matrix-axis-y">Actual class</div>
+                <div class="matrix">
+                  <div class="corner"></div><div class="axis-label">Pred. 0</div><div class="axis-label">Pred. 1</div>
+                  <div class="axis-label">Actual 0</div>
+                  <button class="matrix-cell tn" data-cell="tn"><small>TN</small><strong id="tnValue">0</strong><span>Correct</span></button>
+                  <button class="matrix-cell fp" data-cell="fp"><small>FP</small><strong id="fpValue">0</strong><span>False alarm</span></button>
+                  <div class="axis-label">Actual 1</div>
+                  <button class="matrix-cell fn" data-cell="fn"><small>FN</small><strong id="fnValue">0</strong><span>Missed</span></button>
+                  <button class="matrix-cell tp" data-cell="tp"><small>TP</small><strong id="tpValue">0</strong><span>Correct</span></button>
+                </div>
+              </div>
+              <p class="matrix-explanation" id="matrixExplanation">Click a cell to isolate those points on the plot.</p>
+              <div class="definition-list">
+                <span><b>TP</b> Actual 1, predicted 1.</span><span><b>FP</b> Actual 0, predicted 1.</span>
+                <span><b>FN</b> Actual 1, predicted 0.</span><span><b>TN</b> Actual 0, predicted 0.</span>
+              </div>
+            </div>
+          </details>
+
+          <details class="side-dropdown">
+            <summary><span><b>Point prediction</b><small>Test any coordinate</small></span><i>+</i></summary>
+            <div class="dropdown-content">
+              <div class="coordinate-inputs">
+                <label>X coordinate<input type="number" id="predictX" value="0" step="0.1"></label>
+                <label>Y coordinate<input type="number" id="predictY" value="0" step="0.1"></label>
+                <button class="primary" id="predictButton">Predict</button>
+              </div>
+              <div class="prediction-output" id="predictionOutput">
+                <div class="prediction-class neutral">?</div>
+                <div><small>Ready to experiment</small><p>Enter a point to inspect the model's reasoning.</p></div>
+              </div>
+            </div>
+          </details>
+
+          <details class="side-dropdown">
+            <summary><span><b id="chartTitle">Model diagnostics</b><small>Training story</small></span><i>+</i></summary>
+            <div class="dropdown-content">
+              <canvas id="miniChart"></canvas>
+              <p class="chart-caption" id="chartCaption"></p>
+            </div>
+          </details>
+
+          <details class="side-dropdown">
+            <summary><span><b>Data table <em id="tableCount"></em></b><small>Edit training points</small></span><i>+</i></summary>
+            <div class="dropdown-content">
+              <div class="table-actions"><button class="secondary" id="tableDeleteSelected">Delete selected</button><button class="danger-soft" id="tableClear">Clear data</button></div>
+              <div class="table-scroll">
+                <table>
+                  <thead><tr><th>#</th><th>X</th><th>Y</th><th>Class</th><th>Prediction</th><th></th></tr></thead>
+                  <tbody id="dataTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+
+          <details class="side-dropdown">
+            <summary><span><b>Questions for students</b><small>Discussion and answer key</small></span><i>+</i></summary>
+            <div class="dropdown-content questions-content">
+              <ol id="questionList"></ol>
+              <details class="answer-key">
+                <summary>Reveal answer key</summary>
+                <ol id="answerList"></ol>
+              </details>
+            </div>
+          </details>
+        </aside>
+      </section>
+    </main>
+
+    <footer>Built for exploration. Compare assumptions, boundaries, and mistakes.</footer>
+  </div>
+  <script src="classic.js"></script>
+</body>
+</html>
