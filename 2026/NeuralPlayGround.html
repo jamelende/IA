@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Laboratorio interactivo de redes neuronales con datos personalizados.">
+  <title>Laboratorio Interactivo de Redes Neuronales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="neural.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <div class="eyebrow"><span class="pulse-dot"></span> Laboratorio interactivo de ML</div>
+        <h1>Laboratorio Interactivo de Redes Neuronales</h1>
+        <p>Diseña una red, crea tus propios datos y observa cómo aprende cada capa.</p>
+      </div>
+      <nav class="app-links">
+        <a href="classic.html">Modelos clásicos</a>
+        <a href="clustering.html">Clustering</a>
+        <a href="index.html">Ensambles</a>
+      </nav>
+    </header>
+
+    <section class="training-bar">
+      <button class="icon-button primary" id="playButton" title="Iniciar o pausar">▶</button>
+      <button class="icon-button" id="stepButton" title="Entrenar una época">↦</button>
+      <button class="icon-button" id="resetButton" title="Reiniciar la red">↻</button>
+      <div class="epoch-readout"><small>Época</small><strong id="epochValue">0</strong></div>
+
+      <div class="top-menu">
+        <button class="top-menu-trigger" data-menu="dataMenu"><small>Datos</small><b id="datasetLabel">Dos lunas</b><i>⌄</i></button>
+        <div class="top-popover dataset-popover" id="dataMenu">
+          <b class="popover-title">Conjuntos de datos</b>
+          <div class="dataset-grid" id="datasetGrid">
+            <button data-dataset="xor"><canvas></canvas><span>XOR</span></button>
+            <button data-dataset="moons" class="active"><canvas></canvas><span>Dos lunas</span></button>
+            <button data-dataset="circles"><canvas></canvas><span>Círculos</span></button>
+            <button data-dataset="spiral"><canvas></canvas><span>Espiral</span></button>
+            <button data-dataset="linear"><canvas></canvas><span>Lineal</span></button>
+            <button data-dataset="custom"><canvas></canvas><span>Personalizado</span></button>
+          </div>
+          <label class="slider-row">División de entrenamiento <b id="splitValue">80%</b><input type="range" id="trainSplit" min="50" max="100" value="80"></label>
+        </div>
+      </div>
+
+      <div class="top-menu">
+        <button class="top-menu-trigger" data-menu="editMenu"><small>Edición</small><b id="toolLabel">Pintar azul</b><i>⌄</i></button>
+        <div class="top-popover" id="editMenu">
+          <div class="editor-toolbar" id="toolButtons">
+            <button class="tool blue active" data-tool="blue"><i></i> Pintar azul</button>
+            <button class="tool red" data-tool="red"><i></i> Pintar rojo</button>
+            <button class="tool" data-tool="erase">⌫ Borrar</button>
+          </div>
+          <label class="slider-row">Tamaño del pincel <b id="brushValue">18 px</b><input type="range" id="brushSize" min="5" max="42" value="18"></label>
+          <button class="popover-action" id="clearButton">Limpiar todos los datos</button>
+        </div>
+      </div>
+
+      <div class="top-menu">
+        <button class="top-menu-trigger" data-menu="networkMenu"><small>Red</small><b id="networkSummary">2 capas ocultas</b><i>⌄</i></button>
+        <div class="top-popover wide-popover" id="networkMenu">
+          <div class="popover-header"><b>Características de entrada</b><button class="small-button" id="addLayer">+ Añadir capa</button></div>
+          <div class="feature-picker">
+            <label><input type="checkbox" data-feature="x" checked> X₁</label>
+            <label><input type="checkbox" data-feature="y" checked> X₂</label>
+            <label><input type="checkbox" data-feature="x2"> X₁²</label>
+            <label><input type="checkbox" data-feature="y2"> X₂²</label>
+            <label><input type="checkbox" data-feature="xy"> X₁X₂</label>
+            <label><input type="checkbox" data-feature="sinx"> sen(X₁)</label>
+            <label><input type="checkbox" data-feature="siny"> sen(X₂)</label>
+          </div>
+          <p class="popover-note">Usa los botones +, − y × junto a cada capa para modificar su arquitectura.</p>
+        </div>
+      </div>
+
+      <div class="top-menu">
+        <button class="top-menu-trigger" data-menu="trainingMenu"><small>Entrenamiento</small><b id="trainingSummary">Tanh · η 0.05</b><i>⌄</i></button>
+        <div class="top-popover training-popover" id="trainingMenu">
+          <label>Tasa de aprendizaje<select id="learningRate"><option value="0.01">0.01</option><option value="0.03">0.03</option><option value="0.05" selected>0.05</option><option value="0.1">0.10</option><option value="0.2">0.20</option></select></label>
+          <label>Activación<select id="activation"><option value="tanh" selected>Tanh</option><option value="relu">ReLU</option><option value="sigmoid">Sigmoide</option></select></label>
+          <label>Regularización<select id="regularization"><option value="0">Ninguna</option><option value="0.001" selected>L2 · 0.001</option><option value="0.01">L2 · 0.01</option><option value="0.1">L2 · 0.1</option></select></label>
+          <label>Tamaño del lote<select id="batchSize"><option value="1">1</option><option value="10" selected>10</option><option value="30">30</option><option value="1000">Todos</option></select></label>
+        </div>
+      </div>
+
+      <div class="metric-pill"><small>Pérdida</small><strong id="lossValue">—</strong></div>
+      <div class="metric-pill"><small>Exactitud</small><strong id="accuracyValue">—</strong></div>
+    </section>
+
+    <main class="playground">
+      <aside class="data-panel panel">
+        <div class="panel-heading"><div><span class="kicker">Datos</span><h2>Datos personalizados</h2></div><span id="pointCount">0 puntos</span></div>
+        <div class="data-canvas-wrap">
+          <canvas id="dataCanvas" aria-label="Lienzo editable de datos"></canvas>
+          <div class="canvas-tip">Haz clic o arrastra para pintar puntos</div>
+        </div>
+        <div class="legend"><span><i class="blue-dot"></i> Clase +1</span><span><i class="red-dot"></i> Clase −1</span><span><i class="test-ring"></i> Prueba</span></div>
+      </aside>
+
+      <section class="network-panel panel">
+        <div class="panel-heading">
+          <div><span class="kicker">Red neuronal</span><h2>Capas y activaciones</h2></div>
+          <span class="panel-note">Selecciona una neurona para inspeccionarla</span>
+        </div>
+        <div class="network-stage">
+          <svg id="networkEdges" aria-hidden="true"></svg>
+          <div class="network-columns" id="networkColumns"></div>
+        </div>
+        <div class="network-help">
+          <span><i class="weight-line positive"></i> Peso positivo</span>
+          <span><i class="weight-line negative"></i> Peso negativo</span>
+          <span>Grosor = intensidad</span>
+        </div>
+      </section>
+
+      <aside class="output-panel panel">
+        <div class="panel-heading"><div><span class="kicker">Salida</span><h2>Superficie de decisión</h2></div><span class="status" id="trainingStatus">Lista</span></div>
+        <div class="output-canvas-wrap">
+          <canvas id="outputCanvas" aria-label="Superficie de decisión de la red neuronal"></canvas>
+          <div class="output-label">Probabilidad de clase</div>
+        </div>
+        <div class="probability-scale"><span>−1</span><i></i><span>+1</span></div>
+        <details class="output-dropdown">
+          <summary>Historial de entrenamiento <span id="historyLabel">Pérdida por época</span></summary>
+          <div class="chart-card"><canvas id="lossChart"></canvas></div>
+        </details>
+        <details class="output-dropdown">
+          <summary>Inspeccionar un punto</summary>
+          <div class="prediction-card">
+            <div><label>X₁<input type="number" id="predictX" value="0" step=".1"></label><label>X₂<input type="number" id="predictY" value="0" step=".1"></label><button id="predictButton">Predecir</button></div>
+            <p id="predictionText">La red está lista para recibir una entrada.</p>
+          </div>
+        </details>
+      </aside>
+    </main>
+
+    <section class="lesson-bar">
+      <details>
+        <summary>Cómo usar este laboratorio</summary>
+        <p>Selecciona o pinta datos, edita las capas ocultas y utiliza Reproducir o Paso. Pulsa una neurona para mostrar su mapa de activación.</p>
+      </details>
+      <details>
+        <summary>Preguntas para estudiantes</summary>
+        <ol>
+          <li>¿Por qué las capas ocultas pueden resolver XOR?</li>
+          <li>¿Qué cambia al añadir más neuronas?</li>
+          <li>¿Cómo afecta la tasa de aprendizaje a la estabilidad?</li>
+          <li>¿Por qué puede bajar la pérdida mientras empeora la prueba?</li>
+          <li>¿Cómo modifica la regularización la frontera?</li>
+        </ol>
+      </details>
+    </section>
+  </div>
+  <script src="neural.js"></script>
+</body>
+</html>
