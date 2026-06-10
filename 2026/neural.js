@@ -17,7 +17,13 @@
     epoch: 0, playing: false, timer: null, history: [], selectedNode: { type: "output", layer: -1, node: 0 },
     bounds: { xmin: -3, xmax: 3, ymin: -3, ymax: 3 }, dragging: false
   };
-  const DATASET_LABELS = { xor: "XOR", moons: "Dos lunas", circles: "Círculos", spiral: "Espiral", linear: "Lineal", custom: "Personalizado" };
+  const DATASET_TYPES = ["xor", "moons", "circles", "spiral", "linear", "blobs", "checker", "stripes", "diagonal", "noisy", "imbalanced", "rings3", "waves", "quadrants", "outliers", "custom"];
+  const DATASET_LABELS = {
+    xor: "XOR", moons: "Dos lunas", circles: "Círculos", spiral: "Espiral", linear: "Lineal",
+    blobs: "Nubes", checker: "Tablero", stripes: "Franjas", diagonal: "Diagonal curva",
+    noisy: "Ruidoso", imbalanced: "Desbalanceado", rings3: "Tres anillos", waves: "Ondas",
+    quadrants: "Cuadrantes", outliers: "Atípicos", custom: "Personalizado"
+  };
   const TOOL_LABELS = { blue: "Pintar azul", red: "Pintar rojo", erase: "Borrar" };
 
   const dataCanvas = $("dataCanvas"), dataCtx = dataCanvas.getContext("2d");
@@ -26,7 +32,7 @@
   const edgeSvg = $("networkEdges");
 
   function generate(type, preview = false) {
-    const rng = new RNG(8119 + ["xor", "moons", "circles", "spiral", "linear", "custom"].indexOf(type) * 971), pts = [];
+    const rng = new RNG(8119 + DATASET_TYPES.indexOf(type) * 971), pts = [];
     const n = preview ? 36 : 100;
     const add = (x, y, label) => pts.push({ id: preview ? 0 : state.nextId++, x, y, label, test: false });
     if (type === "xor") {
@@ -39,6 +45,58 @@
       for (let c = 0; c < 2; c++) for (let i = 0; i < n / 2; i++) { const r = .2 + i / (n / 13), t = i / (n / 15) + c * Math.PI; add(r * Math.cos(t) + rng.normal() * .08, r * Math.sin(t) + rng.normal() * .08, c); }
     } else if (type === "linear") {
       for (let i = 0; i < n; i++) { const x = rng.next() * 5 - 2.5, y = rng.next() * 5 - 2.5; add(x, y, y > .6 * x + rng.normal() * .45 ? 1 : 0); }
+    } else if (type === "blobs") {
+      for (let i = 0; i < n; i++) {
+        const label = i < n / 2 ? 0 : 1, cx = label ? 1.25 : -1.25, cy = label ? 1 : -1;
+        add(cx + rng.normal() * .72, cy + rng.normal() * .72, label);
+      }
+    } else if (type === "checker") {
+      for (let i = 0; i < n; i++) {
+        const x = rng.next() * 6 - 3, y = rng.next() * 6 - 3;
+        add(x, y, (Math.floor((x + 3) / 1.5) + Math.floor((y + 3) / 1.5)) % 2);
+      }
+    } else if (type === "stripes") {
+      for (let i = 0; i < n; i++) { const x = rng.next() * 6 - 3, y = rng.next() * 6 - 3; add(x, y, Math.floor((y + 3) / 1.05) % 2); }
+    } else if (type === "diagonal") {
+      for (let i = 0; i < n; i++) {
+        const x = rng.next() * 6 - 3, y = rng.next() * 6 - 3;
+        add(x, y, y > .55 * x + .8 * Math.sin(x * 1.4) + rng.normal() * .2 ? 1 : 0);
+      }
+    } else if (type === "noisy") {
+      for (let i = 0; i < n; i++) {
+        const x = rng.next() * 6 - 3, y = rng.next() * 6 - 3;
+        let label = y > .45 * x + Math.sin(x * 1.5) ? 1 : 0;
+        if (rng.next() < .2) label = 1 - label;
+        add(x, y, label);
+      }
+    } else if (type === "imbalanced") {
+      for (let i = 0; i < n; i++) {
+        const label = i < n * .2 ? 1 : 0, spread = label ? .5 : 1.05;
+        add((label ? 1.45 : -.45) + rng.normal() * spread, (label ? 1.2 : -.35) + rng.normal() * spread, label);
+      }
+    } else if (type === "rings3") {
+      for (let i = 0; i < n; i++) {
+        const band = i % 3, a = rng.next() * Math.PI * 2, r = [.65, 1.45, 2.3][band] + rng.normal() * .11;
+        add(Math.cos(a) * r, Math.sin(a) * r, band === 1 ? 1 : 0);
+      }
+    } else if (type === "waves") {
+      for (let i = 0; i < n; i++) {
+        const x = rng.next() * 6 - 3, y = rng.next() * 6 - 3;
+        add(x, y, y > 1.15 * Math.sin(x * 1.7) + rng.normal() * .18 ? 1 : 0);
+      }
+    } else if (type === "quadrants") {
+      for (let i = 0; i < n; i++) {
+        const x = rng.next() * 6 - 3, y = rng.next() * 6 - 3;
+        add(x, y, x * y > 0 ? 1 : 0);
+      }
+    } else if (type === "outliers") {
+      for (let i = 0; i < n; i++) {
+        const label = i < n / 2 ? 0 : 1;
+        add((label ? 1.2 : -1.2) + rng.normal() * .58, (label ? 1 : -1) + rng.normal() * .58, label);
+      }
+      if (!preview) {
+        add(-2.25, -2.1, 1); add(2.2, 2.15, 0); add(-2, 1.75, 1); add(2, -1.7, 0);
+      }
     } else if (!preview) return [];
     return pts;
   }
@@ -51,6 +109,58 @@
   function splitData() {
     const rng = new RNG(4401);
     state.points.forEach(p => p.test = rng.next() > state.trainSplit);
+  }
+  function normalizeImportedLabel(value) {
+    if (value === true || value === 1 || value === "1" || value === "+1" || value === "blue" || value === "azul") return 1;
+    if (value === false || value === 0 || value === -1 || value === "0" || value === "-1" || value === "red" || value === "rojo") return 0;
+    return null;
+  }
+  function parseImportedDataset(raw) {
+    const parsed = JSON.parse(raw);
+    const rows = Array.isArray(parsed) ? parsed : parsed?.points || parsed?.data;
+    if (!Array.isArray(rows)) throw new Error('El JSON debe ser un arreglo o contener una propiedad "points" o "data".');
+    if (rows.length < 2) throw new Error("El dataset debe contener al menos 2 puntos.");
+    if (rows.length > 5000) throw new Error("El límite es de 5000 puntos para mantener la aplicación fluida.");
+    const points = rows.map((row, index) => {
+      let x, y, label;
+      if (Array.isArray(row)) [x, y, label] = row;
+      else if (row && typeof row === "object") {
+        x = row.x ?? row.X ?? row.feature1 ?? row.x1;
+        y = row.y ?? row.Y ?? row.feature2 ?? row.x2;
+        label = row.label ?? row.class ?? row.clase ?? row.target;
+      }
+      const numericX = Number(x), numericY = Number(y), normalizedLabel = normalizeImportedLabel(label);
+      if (!Number.isFinite(numericX) || !Number.isFinite(numericY) || normalizedLabel === null) {
+        throw new Error(`Registro ${index + 1} inválido. Cada punto necesita x, y y label.`);
+      }
+      return { id: state.nextId++, x: numericX, y: numericY, label: normalizedLabel, test: false };
+    });
+    if (new Set(points.map(p => p.label)).size < 2) throw new Error("El JSON debe incluir puntos de ambas clases.");
+    return points;
+  }
+  function importJsonFile(file) {
+    const message = $("importMessage");
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      message.className = "error"; message.textContent = "El archivo supera el límite de 2 MB."; return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        stop();
+        state.points = parseImportedDataset(String(reader.result));
+        state.dataset = "custom"; splitData(); state.original = state.points.map(p => ({ ...p }));
+        state.bounds = calculateBounds(); resetNetwork(); updateAll();
+        document.querySelectorAll("[data-dataset]").forEach(b => b.classList.toggle("active", b.dataset.dataset === "custom"));
+        message.className = "success"; message.textContent = `${state.points.length} puntos importados correctamente.`;
+      } catch (error) {
+        message.className = "error"; message.textContent = error.message;
+      } finally {
+        $("jsonFileInput").value = "";
+      }
+    };
+    reader.onerror = () => { message.className = "error"; message.textContent = "No se pudo leer el archivo."; };
+    reader.readAsText(file);
   }
   function calculateBounds() {
     if (!state.points.length) return { xmin: -3, xmax: 3, ymin: -3, ymax: 3 };
@@ -290,7 +400,12 @@
     $("toolLabel").textContent = TOOL_LABELS[state.tool];
   }
   function updateAll() { drawData(); drawOutput(); drawLoss(); renderNetwork(); drawDatasetPreviews(); $("splitValue").textContent = `${Math.round(state.trainSplit * 100)}%`; updateSummaries(); }
-  document.querySelectorAll("[data-dataset]").forEach(b => b.addEventListener("click", () => { document.querySelectorAll("[data-dataset]").forEach(x => x.classList.toggle("active", x === b)); setDataset(b.dataset.dataset); }));
+  document.querySelectorAll("[data-dataset]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-dataset]").forEach(x => x.classList.toggle("active", x === b));
+    $("importMessage").textContent = ""; $("importMessage").className = "";
+    setDataset(b.dataset.dataset);
+  }));
+  $("jsonFileInput").addEventListener("change", e => importJsonFile(e.target.files?.[0]));
   $("toolButtons").querySelectorAll("[data-tool]").forEach(b => b.addEventListener("click", () => { state.tool = b.dataset.tool; document.querySelectorAll(".tool").forEach(x => x.classList.toggle("active", x === b)); $("toolLabel").textContent = TOOL_LABELS[state.tool]; }));
   $("brushSize").addEventListener("input", e => { state.brush = Number(e.target.value); $("brushValue").textContent = `${state.brush} px`; });
   $("trainSplit").addEventListener("input", e => { state.trainSplit = Number(e.target.value) / 100; $("splitValue").textContent = `${e.target.value}%`; splitData(); resetNetwork(); drawData(); });
