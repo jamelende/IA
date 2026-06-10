@@ -41,9 +41,24 @@
             <button data-dataset="circles"><canvas></canvas><span>Círculos</span></button>
             <button data-dataset="spiral"><canvas></canvas><span>Espiral</span></button>
             <button data-dataset="linear"><canvas></canvas><span>Lineal</span></button>
+            <button data-dataset="blobs"><canvas></canvas><span>Nubes</span></button>
+            <button data-dataset="checker"><canvas></canvas><span>Tablero</span></button>
+            <button data-dataset="stripes"><canvas></canvas><span>Franjas</span></button>
+            <button data-dataset="diagonal"><canvas></canvas><span>Diagonal curva</span></button>
+            <button data-dataset="noisy"><canvas></canvas><span>Ruidoso</span></button>
+            <button data-dataset="imbalanced"><canvas></canvas><span>Desbalanceado</span></button>
+            <button data-dataset="rings3"><canvas></canvas><span>Tres anillos</span></button>
+            <button data-dataset="waves"><canvas></canvas><span>Ondas</span></button>
+            <button data-dataset="quadrants"><canvas></canvas><span>Cuadrantes</span></button>
+            <button data-dataset="outliers"><canvas></canvas><span>Atípicos</span></button>
             <button data-dataset="custom"><canvas></canvas><span>Personalizado</span></button>
           </div>
           <label class="slider-row">División de entrenamiento <b id="splitValue">80%</b><input type="range" id="trainSplit" min="50" max="100" value="80"></label>
+          <div class="import-box">
+            <div><b>Importar dataset JSON</b><small>Formato: [{ "x": 1, "y": 2, "label": 1 }]</small></div>
+            <label class="import-button">Seleccionar JSON<input type="file" id="jsonFileInput" accept=".json,application/json"></label>
+            <p id="importMessage"></p>
+          </div>
         </div>
       </div>
 
