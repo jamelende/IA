@@ -95,10 +95,12 @@
       <div class="top-menu">
         <button class="top-menu-trigger" data-menu="trainingMenu"><small>Entrenamiento</small><b id="trainingSummary">Tanh · η 0.05</b><i>⌄</i></button>
         <div class="top-popover training-popover" id="trainingMenu">
+          <label>Optimizador<select id="optimizer"><option value="sgd">SGD</option><option value="momentum">Momentum</option><option value="rmsprop">RMSProp</option><option value="adam" selected>Adam</option></select></label>
           <label>Tasa de aprendizaje<select id="learningRate"><option value="0.01">0.01</option><option value="0.03">0.03</option><option value="0.05" selected>0.05</option><option value="0.1">0.10</option><option value="0.2">0.20</option></select></label>
           <label>Activación<select id="activation"><option value="tanh" selected>Tanh</option><option value="relu">ReLU</option><option value="sigmoid">Sigmoide</option></select></label>
           <label>Regularización<select id="regularization"><option value="0">Ninguna</option><option value="0.001" selected>L2 · 0.001</option><option value="0.01">L2 · 0.01</option><option value="0.1">L2 · 0.1</option></select></label>
           <label>Tamaño del lote<select id="batchSize"><option value="1">1</option><option value="10" selected>10</option><option value="30">30</option><option value="1000">Todos</option></select></label>
+          <label class="stop-option"><input type="checkbox" id="stopAtPerfect" checked> Detener al alcanzar 100% de exactitud</label>
         </div>
       </div>
 

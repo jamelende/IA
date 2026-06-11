@@ -15,7 +15,8 @@
     dataset: "moons", points: [], original: [], nextId: 1, tool: "blue", brush: 18,
     trainSplit: .8, layers: [4, 3], features: ["x", "y"], network: null,
     epoch: 0, playing: false, timer: null, history: [], selectedNode: { type: "output", layer: -1, node: 0 },
-    bounds: { xmin: -3, xmax: 3, ymin: -3, ymax: 3 }, dragging: false
+    bounds: { xmin: -3, xmax: 3, ymin: -3, ymax: 3 }, dragging: false,
+    optimizerState: null, optimizerStep: 0, lastMetrics: null
   };
   const DATASET_TYPES = ["xor", "moons", "circles", "spiral", "linear", "blobs", "checker", "stripes", "diagonal", "noisy", "imbalanced", "rings3", "waves", "quadrants", "outliers", "custom"];
   const DATASET_LABELS = {
@@ -193,8 +194,19 @@
     }
     return { sizes, layers };
   }
+  function zerosLikeNetwork() {
+    return {
+      weights: state.network.layers.map(l => l.weights.map(row => row.map(() => 0))),
+      biases: state.network.layers.map(l => l.biases.map(() => 0))
+    };
+  }
+  function resetOptimizerState() {
+    state.optimizerState = { first: zerosLikeNetwork(), second: zerosLikeNetwork() };
+    state.optimizerStep = 0;
+  }
   function resetNetwork() {
     stop(); state.network = makeNetwork(); state.epoch = 0; state.history = []; state.selectedNode = { type: "output", layer: state.layers.length, node: 0 };
+    resetOptimizerState(); state.lastMetrics = null;
     renderNetwork(); evaluate(); updateSummaries();
   }
   function forward(input) {
@@ -209,7 +221,7 @@
   }
   function trainEpoch() {
     if (!state.points.some(p => !p.test) || state.features.length === 0) return;
-    const train = state.points.filter(p => !p.test), lr = Number($("learningRate").value), lambda = Number($("regularization").value);
+    const train = state.points.filter(p => !p.test), lr = Number($("learningRate").value), lambda = Number($("regularization").value), optimizer = $("optimizer").value;
     const requestedBatch = Number($("batchSize").value), batchSize = requestedBatch > train.length ? train.length : requestedBatch;
     const rng = new RNG(7001 + state.epoch), shuffled = [...train].sort(() => rng.next() - .5);
     for (let start = 0; start < shuffled.length; start += batchSize) {
@@ -230,13 +242,37 @@
           result.activations[l].forEach((a, i) => gradW[l][j][i] += d * a);
         }));
       });
+      state.optimizerStep++;
       state.network.layers.forEach((layer, l) => layer.weights.forEach((row, j) => row.forEach((w, i) => {
-        layer.weights[j][i] -= lr * (gradW[l][j][i] / batch.length + lambda * w);
+        const gradient = gradW[l][j][i] / batch.length + lambda * w;
+        layer.weights[j][i] -= optimizerDelta(gradient, l, j, i, false, optimizer, lr);
       })));
-      state.network.layers.forEach((layer, l) => layer.biases.forEach((b, j) => layer.biases[j] -= lr * gradB[l][j] / batch.length));
+      state.network.layers.forEach((layer, l) => layer.biases.forEach((b, j) => {
+        const gradient = gradB[l][j] / batch.length;
+        layer.biases[j] -= optimizerDelta(gradient, l, j, 0, true, optimizer, lr);
+      }));
     }
     state.epoch++; evaluate();
     if (state.epoch % 2 === 0 || state.epoch < 10) { drawOutput(); drawNeuronMaps(); drawEdges(); drawLoss(); }
+  }
+  function optimizerDelta(gradient, layer, node, input, bias, optimizer, lr) {
+    const first = bias ? state.optimizerState.first.biases[layer] : state.optimizerState.first.weights[layer][node];
+    const second = bias ? state.optimizerState.second.biases[layer] : state.optimizerState.second.weights[layer][node];
+    const index = bias ? node : input;
+    if (optimizer === "sgd") return lr * gradient;
+    if (optimizer === "momentum") {
+      first[index] = .9 * first[index] + gradient;
+      return lr * first[index];
+    }
+    if (optimizer === "rmsprop") {
+      second[index] = .9 * second[index] + .1 * gradient * gradient;
+      return lr * gradient / (Math.sqrt(second[index]) + 1e-8);
+    }
+    first[index] = .9 * first[index] + .1 * gradient;
+    second[index] = .999 * second[index] + .001 * gradient * gradient;
+    const correctedFirst = first[index] / (1 - .9 ** state.optimizerStep);
+    const correctedSecond = second[index] / (1 - .999 ** state.optimizerStep);
+    return lr * correctedFirst / (Math.sqrt(correctedSecond) + 1e-8);
   }
   function evaluate() {
     if (!state.network || !state.points.length) { $("lossValue").textContent = "—"; $("accuracyValue").textContent = "—"; return; }
@@ -247,6 +283,7 @@
     });
     if (!n) state.points.forEach(p => { const out = clamp(forward(inputVector(p.x, p.y)).output, 1e-7, 1 - 1e-7); loss -= p.label * Math.log(out) + (1 - p.label) * Math.log(1 - out); correct += (out >= .5 ? 1 : 0) === p.label; n++; });
     const metrics = { loss: loss / Math.max(1, n), accuracy: correct / Math.max(1, n) };
+    state.lastMetrics = metrics;
     state.history.push({ epoch: state.epoch, ...metrics });
     $("epochValue").textContent = state.epoch; $("lossValue").textContent = metrics.loss.toFixed(3); $("accuracyValue").textContent = `${(metrics.accuracy * 100).toFixed(1)}%`;
   }
@@ -255,7 +292,16 @@
   function play() {
     if (state.playing) return stop();
     state.playing = true; $("playButton").textContent = "❚❚"; $("trainingStatus").textContent = "Entrenando"; $("trainingStatus").classList.add("running");
-    const tick = () => { if (!state.playing) return; for (let i = 0; i < 3; i++) trainEpoch(); state.timer = setTimeout(tick, 18); };
+    const tick = () => {
+      if (!state.playing) return;
+      for (let i = 0; i < 3; i++) {
+        trainEpoch();
+        if ($("stopAtPerfect").checked && state.lastMetrics?.accuracy >= 1) {
+          stop(); $("trainingStatus").textContent = "Objetivo alcanzado"; return;
+        }
+      }
+      state.timer = setTimeout(tick, 18);
+    };
     tick();
   }
   function stop() {
@@ -395,7 +441,8 @@
 
   function updateSummaries() {
     $("networkSummary").textContent = `${state.layers.length} ${state.layers.length === 1 ? "capa oculta" : "capas ocultas"}`;
-    $("trainingSummary").textContent = `${$("activation").options?.[$("activation").selectedIndex]?.text || $("activation").value} · η ${$("learningRate").value}`;
+    const optimizerNames = { sgd: "SGD", momentum: "Momentum", rmsprop: "RMSProp", adam: "Adam" };
+    $("trainingSummary").textContent = `${optimizerNames[$("optimizer").value]} · ${$("activation").options?.[$("activation").selectedIndex]?.text || $("activation").value}`;
     $("datasetLabel").textContent = DATASET_LABELS[state.dataset];
     $("toolLabel").textContent = TOOL_LABELS[state.tool];
   }
@@ -412,13 +459,21 @@
   $("clearButton").addEventListener("click", () => { state.points = []; state.dataset = "custom"; state.bounds = calculateBounds(); resetNetwork(); updateAll(); });
   $("playButton").addEventListener("click", play); $("stepButton").addEventListener("click", step); $("resetButton").addEventListener("click", resetNetwork);
   ["learningRate", "regularization", "batchSize"].forEach(id => $(id).addEventListener("change", () => { stop(); updateSummaries(); }));
+  $("optimizer").addEventListener("change", () => { stop(); resetOptimizerState(); updateSummaries(); });
+  $("stopAtPerfect").addEventListener("change", updateSummaries);
   $("activation").addEventListener("change", () => { resetNetwork(); updateSummaries(); });
   document.querySelectorAll("[data-feature]").forEach(input => input.addEventListener("change", () => {
     state.features = [...document.querySelectorAll("[data-feature]:checked")].map(x => x.dataset.feature);
     if (!state.features.length) { input.checked = true; state.features = [input.dataset.feature]; }
     resetNetwork();
   }));
-  $("addLayer").addEventListener("click", () => { if (state.layers.length < 4) { state.layers.push(3); resetNetwork(); updateSummaries(); } });
+  $("addLayer").addEventListener("click", () => {
+    if (state.layers.length < 6) {
+      state.layers.push(3); resetNetwork(); updateSummaries();
+    } else {
+      $("trainingStatus").textContent = "Máximo: 6 capas";
+    }
+  });
   $("predictButton").addEventListener("click", () => {
     const x = Number($("predictX").value), y = Number($("predictY").value), out = forward(inputVector(x, y)).output;
     $("predictionText").innerHTML = `Clase <b>${out >= .5 ? "+1" : "−1"}</b> · probabilidad de +1: <b>${(out * 100).toFixed(1)}%</b>.`;
