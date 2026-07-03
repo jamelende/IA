@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Canvas-first Turing Machine Builder with Zoom, Pan, Piece Copy, Batch Testing and JFLAP Import</title>
+<style>
+  :root{
+    --bg:#f6f8fb;--panel:#ffffff;--ink:#111827;--muted:#667085;--line:#d0d5dd;
+    --primary:#2563eb;--primary2:#1d4ed8;--accent:#f59e0b;--good:#16a34a;--bad:#dc2626;
+    --purple:#7c3aed;--soft:#eef4ff;--shadow:0 10px 25px rgba(15,23,42,.07);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#f8fafc,#edf3fb);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);overflow:hidden}
+  button,input,select,textarea{font:inherit}
+  button{user-select:none}
+  .app{height:100vh;display:grid;grid-template-rows:auto 1fr auto;gap:7px;padding:7px;overflow:hidden}
+  .topbar,.bottombar,.canvasCard{background:rgba(255,255,255,.96);border:1px solid rgba(208,213,221,.9);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;flex-wrap:wrap;min-height:48px}
+  .brand{display:flex;align-items:center;gap:8px;min-width:250px}.logo{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--purple));color:white;display:grid;place-items:center;font-weight:900;font-size:13px;box-shadow:0 8px 18px rgba(37,99,235,.20)}
+  h1{font-size:15px;margin:0;line-height:1.1}.subtitle{font-size:10.5px;color:var(--muted);margin-top:1px}
+  .row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.stack{display:flex;flex-direction:column;gap:5px}
+  .btn{border:1px solid #cbd5e1;background:#fff;color:#1f2937;border-radius:9px;padding:6px 8px;cursor:pointer;font-weight:800;transition:.12s;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;font-size:12px;line-height:1.1}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(15,23,42,.07)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:white}.btn.primary:hover{background:var(--primary2)}
+  .btn.good{background:var(--good);border-color:var(--good);color:white}.btn.bad{background:var(--bad);border-color:var(--bad);color:white}.btn.warn{background:#f97316;border-color:#f97316;color:white}.btn.ghost{background:#f8fafc}.btn.small{font-size:11px;padding:5px 7px;border-radius:8px}.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+  label{font-size:10.5px;color:#344054;font-weight:750;display:block;margin-bottom:2px}
+  input,select,textarea{border:1px solid #cbd5e1;border-radius:9px;padding:5px 7px;background:#fff;color:#111827;outline:none;min-width:0;font-size:12px}
+  input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(37,99,235,.13)}
+  .main{display:grid;grid-template-columns:1fr;gap:7px;min-height:0;overflow:hidden}
+  .canvasCard{position:relative;overflow:hidden;min-height:0;height:100%}
+  #graph{width:100%;height:100%;display:block;background:radial-gradient(circle at 20px 20px, rgba(37,99,235,.11) 2px, transparent 2px) 0 0/34px 34px,linear-gradient(180deg,#fff,#f8fbff)}
+  .statusPill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 8px;background:#eef4ff;border:1px solid #bfdbfe;color:#1d4ed8;font-weight:900;font-size:11px}.dot{width:8px;height:8px;border-radius:999px;background:var(--primary)}.dot.run{background:var(--good);animation:pulse 1s infinite}.dot.halt{background:var(--accent)}.dot.err{background:var(--bad)}@keyframes pulse{50%{opacity:.35}}
+  .badge{display:inline-flex;border-radius:999px;padding:2px 6px;font-size:10.5px;font-weight:850;border:1px solid #dbe3ec;background:#f8fafc;color:#334155}.badge.good{background:#ecfdf3;color:#027a48;border-color:#abefc6}.badge.bad{background:#fef3f2;color:#b42318;border-color:#fecdca}.badge.warn{background:#fffaeb;color:#b54708;border-color:#fedf89}
+  .svgEdge{stroke:#64748b;stroke-width:2.2;fill:none}.svgEdge.active{stroke:var(--accent);stroke-width:4;filter:drop-shadow(0 0 5px rgba(245,158,11,.55))}.svgEdge.selected{stroke:var(--purple);stroke-width:3}.svgEdge.pieceSelected{stroke:#0891b2;stroke-width:3.8}.svgEdge.outgoing{stroke:#2563eb;stroke-width:3;opacity:.8}
+  .edgeLabel{font-size:12px;font-weight:900;fill:#334155;paint-order:stroke;stroke:white;stroke-width:5;stroke-linejoin:round;cursor:pointer}.edgeLabel.active{fill:#b45309;font-size:13px}.edgeLabel.pieceSelected{fill:#0e7490}
+  .stateCircle{fill:#fff;stroke:#475569;stroke-width:2.4;cursor:grab}.stateCircle.current{stroke:var(--accent);stroke-width:5;filter:drop-shadow(0 0 8px rgba(245,158,11,.55))}.stateCircle.selfBlink{animation:selfStateBlink .28s ease-in-out 0s 5;transform-box:fill-box;transform-origin:center}.stateCircle.accept{stroke:var(--good)}.stateCircle.reject{stroke:var(--bad)}.stateCircle.start{stroke:var(--primary)}.stateCircle.selected{stroke:var(--purple);stroke-width:4}.stateCircle.pieceSelected{stroke:#0891b2;stroke-width:5;filter:drop-shadow(0 0 7px rgba(8,145,178,.38))}.stateLabel{font-weight:900;font-size:14px;pointer-events:none;fill:#0f172a}.stateMeta{font-size:10px;pointer-events:none;fill:#64748b;font-weight:750}.transitionHandle{fill:#2563eb;stroke:white;stroke-width:3;cursor:crosshair;filter:drop-shadow(0 2px 5px rgba(37,99,235,.35))}.transitionHandle:hover{fill:#1d4ed8}.startArrow{stroke:var(--primary);stroke-width:3;fill:none}.tempLine{stroke:var(--purple);stroke-width:3;stroke-dasharray:7 5;fill:none;pointer-events:none}
+  .selectionRect{fill:rgba(37,99,235,.10);stroke:#2563eb;stroke-width:2;stroke-dasharray:8 6;pointer-events:none}
+  @keyframes selfStateBlink{0%,100%{fill:#fff;stroke-width:5;filter:drop-shadow(0 0 8px rgba(245,158,11,.55))}50%{fill:#fef3c7;stroke:#f97316;stroke-width:7;filter:drop-shadow(0 0 16px rgba(249,115,22,.75))}}
+  .canvasNav{position:absolute;left:10px;top:10px;z-index:10;display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:999px;padding:5px 6px;box-shadow:0 8px 20px rgba(15,23,42,.10);backdrop-filter:blur(8px)}.canvasNav .btn{font-size:10.5px;padding:4px 7px;border-radius:999px}.canvasNav .hint{font-size:10px;color:#475467;font-weight:800;padding:0 4px;white-space:nowrap}.canvasCard.panning #graph{cursor:grabbing}#graph{cursor:grab}.stateCircle,.transitionHandle,.edgeLabel{cursor:pointer}
+  .tapeOuter{display:flex;align-items:center;gap:6px;overflow:auto;padding:6px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;min-height:60px}.cell{position:relative;min-width:34px;height:34px;border:1px solid #94a3b8;background:#fff;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.cell.head{border-color:var(--accent);background:#fff7ed;box-shadow:0 0 0 3px rgba(245,158,11,.14)}.cell.head::after{content:'HEAD';position:absolute;bottom:-17px;font-size:8px;color:#b45309;font-weight:900}.idx{position:absolute;top:-14px;font-size:8.5px;color:#64748b;font-weight:700}
+  .bottombar{padding:7px 9px;overflow:visible}.bottombarGrid{display:grid;grid-template-columns:390px 1fr;gap:8px;align-items:start}.executionControls{display:grid;grid-template-columns:repeat(5,minmax(56px,1fr));gap:5px}.runSplit{display:grid;grid-template-columns:1fr auto;gap:3px;position:relative}.runSplit details{position:relative}.runSplit summary{list-style:none}.runSplit summary::-webkit-details-marker{display:none}.runSpeedPanel{position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);z-index:40;width:210px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 44px rgba(15,23,42,.18);padding:8px}.runSpeedPanel .speed{display:grid;grid-template-columns:1fr 58px;gap:6px;align-items:center}.speedDrop{padding-left:6px;padding-right:6px}.explain{background:linear-gradient(180deg,#eef4ff,#fff);border:1px solid #bfdbfe;border-radius:12px;padding:6px 8px;font-size:12px;line-height:1.35;color:#344054;min-height:38px;max-height:48px;overflow:auto}
+  table{width:100%;border-collapse:separate;border-spacing:0 4px;font-size:11px}.ruleRow{background:#f8fafc;cursor:pointer}.ruleRow td{padding:5px 4px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}.ruleRow td:first-child{border-left:1px solid #e2e8f0;border-radius:8px 0 0 8px}.ruleRow td:last-child{border-right:1px solid #e2e8f0;border-radius:0 8px 8px 0}.ruleRow:hover{background:#eef4ff}.ruleRow.active{background:#fff7ed;outline:2px solid #fdba74}.ruleRow.duplicate{background:#fef2f2;outline:2px solid #fecaca}.ruleCode{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:850;color:#1e293b}.log{height:100%;overflow:auto;background:#0f172a;color:#dbeafe;border-radius:12px;padding:7px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;line-height:1.35}.log div{border-bottom:1px solid rgba(255,255,255,.08);padding:3px 0}.tiny{font-size:10.5px;color:var(--muted)}
+  .popover{position:absolute;background:white;border:1px solid #d0d5dd;border-radius:16px;box-shadow:0 24px 60px rgba(15,23,42,.22);padding:10px;z-index:20;display:none;width:min(390px,calc(100% - 28px))}.popover.show{display:block}.popoverTitle{font-weight:900;margin:0 0 2px}.popoverSub{font-size:11px;color:var(--muted);margin-bottom:8px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.symbolGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin-top:5px}.choiceBtn{border:1px solid #cbd5e1;background:#fff;border-radius:8px;min-height:28px;font-size:11px;font-weight:900;cursor:pointer}.choiceBtn:hover,.choiceBtn.selected{background:#eef4ff;border-color:#2563eb;color:#1d4ed8}.dirGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:5px}.toast{position:fixed;left:50%;top:10px;transform:translateX(-50%);background:#111827;color:white;padding:8px 12px;border-radius:999px;box-shadow:0 15px 35px rgba(0,0,0,.25);z-index:99;display:none;font-size:12px}.toast.show{display:block}.hiddenFile{display:none}.miniHelp{font-size:11px;line-height:1.35;color:#475467;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:7px}.fileText{width:100%;height:52px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;display:none;margin-top:6px}
+
+  .toolPanel{position:absolute;right:12px;top:12px;z-index:28;background:#fff;border:1px solid #d0d5dd;border-radius:16px;box-shadow:0 24px 60px rgba(15,23,42,.22);padding:10px;width:min(520px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;display:none}
+  .toolPanel.show{display:block}
+  .toolPanelTitle{font-weight:900;font-size:14px;margin-bottom:2px}
+  .toolPanelSub{font-size:11px;color:var(--muted);line-height:1.35;margin-bottom:8px}
+  .batchText{width:100%;height:108px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;resize:vertical}
+  .batchResults{margin-top:8px;max-height:230px;overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}
+  .batchResults table{border-spacing:0;width:100%;font-size:11px}
+  .batchResults th{position:sticky;top:0;background:#eef4ff;color:#1e3a8a;text-align:left;padding:6px;border-bottom:1px solid #bfdbfe}
+  .batchResults td{padding:5px 6px;border-bottom:1px solid #e2e8f0;background:#fff;vertical-align:top}
+  .resultAccept{color:#027a48;font-weight:900}.resultReject{color:#b42318;font-weight:900}.resultHalt{color:#b54708;font-weight:900}.resultError{color:#b42318;font-weight:900}.resultLimit{color:#7c3aed;font-weight:900}
+
+  .menu{position:relative}.menu>summary{list-style:none}.menu>summary::-webkit-details-marker{display:none}.menuPanel{position:absolute;right:0;top:calc(100% + 5px);z-index:30;min-width:185px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;box-shadow:0 18px 44px rgba(15,23,42,.18);padding:7px;display:grid;gap:5px}.menuPanel .btn{width:100%;justify-content:flex-start}.menu.left .menuPanel{right:auto;left:0}.compactDetails{position:relative}.compactDetails>summary{cursor:pointer;list-style:none}.compactDetails>summary::-webkit-details-marker{display:none}.compactPanel{position:absolute;left:0;bottom:calc(100% + 5px);z-index:25;min-width:245px;background:#fff;border:1px solid #d0d5dd;border-radius:12px;box-shadow:0 18px 44px rgba(15,23,42,.18);padding:8px}.topControls{display:flex;gap:6px;align-items:end;flex-wrap:wrap}.presetBox{min-width:220px}.presetBox select{width:100%}.compactTape{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:end}.compactTape input{width:100%}
+  @media(max-width:1160px){body{overflow:auto}.app{height:auto;min-height:100vh;overflow:visible}.main{grid-template-columns:1fr}.bottombarGrid{grid-template-columns:1fr}.canvasCard{min-height:560px}#graph{min-height:560px}.compactDetails .compactPanel{left:auto;right:0}}
+  @media(max-width:760px){.app{padding:6px}.executionControls{grid-template-columns:repeat(2,1fr)}.topbar{align-items:flex-start}.symbolGrid{grid-template-columns:repeat(4,1fr)}.canvasCard{min-height:500px}#graph{min-height:500px}.compactTape{grid-template-columns:1fr}.menuPanel{right:auto;left:0}.presetBox{min-width:160px}}
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">TM</div>
+      <div>
+        <h1>Canvas-first Turing Machine Builder</h1>
+        <div class="subtitle">Double-click: state · blue dot: transition · wheel: zoom · drag canvas: pan · pieces · batch tests · JFLAP import</div>
+      </div>
+    </div>
+    <div class="topControls">
+      <div class="presetBox"><label>Preset</label><select id="presetSelect"></select></div>
+      <button class="btn small primary" id="loadPresetBtn">Load</button>
+      <details class="menu left">
+        <summary class="btn small ghost">Machine ▾</summary>
+        <div class="menuPanel">
+          <button class="btn small ghost" id="newBtn">New machine</button>
+          <button class="btn small ghost" id="autoLayoutBtn">Auto layout</button>
+          <button class="btn small ghost" id="batchTestBtn">Batch testing</button>
+          <hr style="border:none;border-top:1px solid var(--line);width:100%;margin:4px 0" />
+          <button class="btn small ghost" id="selectPieceBtn">Select piece</button>
+          <button class="btn small ghost" id="copyPieceBtn">Copy piece</button>
+          <button class="btn small ghost" id="pastePieceBtn">Paste piece</button>
+          <button class="btn small ghost" id="clearPieceBtn">Clear selection</button>
+        </div>
+      </details>
+      <details class="menu">
+        <summary class="btn small ghost">Files ▾</summary>
+        <div class="menuPanel">
+          <button class="btn small" id="exportJsonBtn">Export JSON</button>
+          <button class="btn small" id="importJsonBtn">Import JSON</button>
+          <button class="btn small" id="importJffBtn">Import JFLAP .jff</button>
+          <button class="btn small" id="exportJffBtn">Export JFLAP</button>
+          <input class="hiddenFile" type="file" id="jffFileInput" accept=".jff,.xml,application/xml,text/xml" />
+          <button class="btn small" id="downloadHtmlBtn">Download HTML</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="canvasCard" id="canvasCard">
+      <svg id="graph" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#64748b"></path></marker>
+          <marker id="arrowActive" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"></path></marker>
+          <marker id="arrowPrimary" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#2563eb"></path></marker>
+        </defs>
+        <g id="edgeLayer"></g>
+        <path id="tempTransitionLine" class="tempLine" style="display:none"></path>
+        <rect id="selectionRect" class="selectionRect" style="display:none"></rect>
+        <g id="stateLayer"></g>
+      </svg>
+      <div class="popover" id="statePopover">
+        <div class="popoverTitle" id="stateTitle">State</div>
+        <div class="popoverSub">Quick state actions</div>
+        <div class="grid2">
+          <div><label>Rename state</label><input id="stateNameInput" /></div>
+          <div><label>Type</label><select id="stateTypeSelect"><option value="normal">normal</option><option value="accept">accept</option><option value="reject">reject</option></select></div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small primary" id="saveStateBtn">Save</button>
+          <button class="btn small" id="setStartBtn">Set start</button>
+          <button class="btn small bad" id="deleteStateBtn">Delete</button>
+          <button class="btn small ghost" id="closeStatePopoverBtn">Close</button>
+        </div>
+      </div>
+
+      <div class="popover" id="transitionPopover">
+        <div class="popoverTitle" id="transitionTitle">Transition</div>
+        <div class="popoverSub" id="transitionSub">Rule editor</div>
+        <div class="grid3">
+          <div><label>Read</label><input id="editRead" maxlength="4" /></div>
+          <div><label>Write</label><input id="editWrite" maxlength="4" /></div>
+          <div><label>Move</label><select id="editMove"><option>R</option><option>L</option><option>S</option></select></div>
+        </div>
+        <div style="margin-top:8px"><label>Read symbol</label><div class="symbolGrid" id="readSymbolGrid"></div></div>
+        <div style="margin-top:8px"><label>Write symbol</label><div class="symbolGrid" id="writeSymbolGrid"></div></div>
+        <div style="margin-top:8px"><label>Move with one click</label><div class="dirGrid"><button class="choiceBtn" data-dir="L">L ←</button><button class="choiceBtn" data-dir="S">S stay</button><button class="choiceBtn" data-dir="R">R →</button></div></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small primary" id="saveTransitionBtn">Done</button>
+          <button class="btn small bad" id="deleteTransitionBtn">Delete</button>
+          <button class="btn small ghost" id="closeTransitionPopoverBtn">Close</button>
+        </div>
+      </div>
+
+      <div class="toolPanel" id="batchPanel">
+        <div class="toolPanelTitle">Batch testing</div>
+        <div class="toolPanelSub">One input per line. Use <b>ε</b> for the empty string. The batch runner does not change the visible tape or current step.</div>
+        <label>Inputs</label>
+        <textarea id="batchInput" class="batchText" spellcheck="false">ε
+0
+1
+01
+0011
+000111
+00111
+011</textarea>
+        <div class="row" style="margin-top:8px">
+          <div style="width:120px"><label>Max steps</label><input id="batchMaxSteps" type="number" min="1" value="10000" /></div>
+          <button class="btn small primary" id="runBatchBtn">Run batch</button>
+          <button class="btn small ghost" id="fillBatchBtn">Use current tape</button>
+          <button class="btn small ghost" id="closeBatchBtn">Close</button>
+        </div>
+        <div class="batchResults" id="batchResults">
+          <div class="miniHelp">Run batch tests to see result, steps, final state and reason for each input.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Rules/checks and execution trace panels removed to maximize the canvas. -->
+
+  </main>
+
+  <footer class="bottombar">
+    <div class="bottombarGrid">
+      <div class="stack">
+        <div class="row">
+          <span class="statusPill"><span class="dot" id="runDot"></span><span id="statusText">Ready</span></span>
+          <span class="tiny" id="stepCounter">Step 0</span>
+        </div>
+        <div class="compactTape">
+          <div><label>Input tape</label><input id="tapeInput" placeholder="e.g. 111Z111" /></div>
+          <button class="btn small primary" id="setTapeBtn">Set tape</button>
+          <details class="compactDetails">
+            <summary class="btn small ghost">Tape options ▴</summary>
+            <div class="compactPanel">
+              <div class="grid2">
+                <div><label>Head position</label><input id="headInput" type="number" value="0" /></div>
+                <div><label>Blank symbol</label><input id="blankInput" value="_" maxlength="2" /></div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="executionControls">
+          <button class="btn small" id="backBtn">← Back</button>
+          <button class="btn small primary" id="stepBtn">Step →</button>
+          <div class="runSplit">
+            <button class="btn small good" id="runBtn">Run</button>
+            <details>
+              <summary class="btn small good speedDrop" title="Run speed">▾</summary>
+              <div class="runSpeedPanel">
+                <label>Run speed</label>
+                <div class="speed">
+                  <input id="speedSlider" type="range" min="100" max="1400" value="650" step="50" />
+                  <span class="tiny" id="speedLabel">650 ms</span>
+                </div>
+              </div>
+            </details>
+          </div>
+          <button class="btn small warn" id="pauseBtn">Pause</button>
+          <button class="btn small bad" id="resetBtn">Reset</button>
+        </div>
+        <div class="tapeOuter" id="tape"></div>
+        <div class="explain" id="explanation">Ready. Build a machine with the mouse, set an input tape, then press Step.</div>
+      </div>
+    </div>
+    <textarea id="jsonArea" class="fileText" placeholder="JSON import/export area"></textarea>
+  </footer>
+</div>
+<script>
+(function(){
+'use strict';
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const svg = $('graph');
+const stateLayer = $('stateLayer');
+const edgeLayer = $('edgeLayer');
+const tempLine = $('tempTransitionLine');
+const selectionRectEl = $('selectionRect');
+const canvasCard = $('canvasCard');
+const radius = 38;
+let uidCount = 0;
+let machine, run, selectedStateId = null, selectedTransitionId = null;
+let selectedPieceStateIds = new Set(), selectedPieceTransitionIds = new Set(), clipboardPiece = null;
+let selectionMode = false, selectionDrag = null;
+let stateDrag = null, connectDrag = null, panDrag = null, timer = null;
+let blinkStateName = null, blinkTimer = null;
+const baseView = {x:0,y:0,w:1000,h:620};
+let view = {...baseView};
+
+function uid(prefix='id'){ uidCount++; return prefix + uidCount + '_' + Math.random().toString(36).slice(2,7); }
+function st(name,x,y,flags={}){ return {id:uid('s'), name, x, y, start:!!flags.start, accept:!!flags.accept, reject:!!flags.reject}; }
+function tr(from,read,write,move,to){ return {id:uid('t'), from, read, write, move, to}; }
+function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._timer); toast._timer=setTimeout(()=>t.classList.remove('show'),2200); }
+
+const presetGroups=[
+  {label:'Nivel básico: máquinas transformadoras y recorridos simples',items:[
+    ['unaryIncrement',{name:'Básico · Incremento unario: 1ⁿ → 1ⁿ⁺¹',blank:'_',input:'111',head:0,states:[st('q0',260,300,{start:true}),st('qAccept',680,300,{accept:true})],transitions:[tr('q0','1','1','R','q0'),tr('q0','_','1','S','qAccept')]}],
+    ['unaryDecrement',{name:'Básico · Decremento unario: 1ⁿ → 1ⁿ⁻¹',blank:'_',input:'1111',head:0,states:[st('q0',260,300,{start:true}),st('qAccept',610,245,{accept:true}),st('qReject',610,385,{reject:true})],transitions:[tr('q0','1','_','S','qAccept'),tr('q0','_','_','S','qReject')]}],
+    ['binaryFlip',{name:'Básico · Invertir bits: 0↔1',blank:'_',input:'10110',head:0,states:[st('q0',260,300,{start:true}),st('qAccept',680,300,{accept:true})],transitions:[tr('q0','0','1','R','q0'),tr('q0','1','0','R','q0'),tr('q0','_','_','S','qAccept')]}],
+    ['eraseOnes',{name:'Básico · Borrar todos los 1',blank:'_',input:'11111',head:0,states:[st('q0',260,300,{start:true}),st('qAccept',680,300,{accept:true})],transitions:[tr('q0','1','_','R','q0'),tr('q0','_','_','S','qAccept')]}],
+    ['evenOnes',{name:'Básico · Acepta binarios con número par de 1',blank:'_',input:'10101',head:0,states:[st('qEven',240,300,{start:true}),st('qOdd',500,300,{}),st('qAccept',760,230,{accept:true}),st('qReject',760,380,{reject:true})],transitions:[tr('qEven','0','0','R','qEven'),tr('qEven','1','1','R','qOdd'),tr('qEven','_','_','S','qAccept'),tr('qOdd','0','0','R','qOdd'),tr('qOdd','1','1','R','qEven'),tr('qOdd','_','_','S','qReject')]}]
+  ]},
+  {label:'Nivel intermedio: patrones, búsqueda y lenguajes clásicos',items:[
+    ['contains101',{name:'Intermedio · Acepta cadenas que contienen 101',blank:'_',input:'001011',head:0,states:[st('q0',180,310,{start:true}),st('q1',390,230,{}),st('q10',590,330,{}),st('qAccept',800,230,{accept:true}),st('qReject',800,420,{reject:true})],transitions:[tr('q0','0','0','R','q0'),tr('q0','1','1','R','q1'),tr('q0','_','_','S','qReject'),tr('q1','1','1','R','q1'),tr('q1','0','0','R','q10'),tr('q1','_','_','S','qReject'),tr('q10','1','1','S','qAccept'),tr('q10','0','0','R','q0'),tr('q10','_','_','S','qReject')]}],
+    ['binaryIncrement',{name:'Intermedio · Incremento binario: x → x+1',blank:'_',input:'1011',head:0,states:[st('qScan',220,300,{start:true}),st('qCarry',500,300,{}),st('qAccept',770,300,{accept:true})],transitions:[tr('qScan','0','0','R','qScan'),tr('qScan','1','1','R','qScan'),tr('qScan','_','_','L','qCarry'),tr('qCarry','1','0','L','qCarry'),tr('qCarry','0','1','S','qAccept'),tr('qCarry','_','1','S','qAccept')]}],
+    ['zeroNOneN',{name:'Intermedio · Reconoce 0ⁿ1ⁿ',blank:'_',input:'000111',head:0,states:[st('q0',150,310,{start:true}),st('qFind1',350,210,{}),st('qBack',520,390,{}),st('qCheck',690,210,{}),st('qAccept',860,210,{accept:true}),st('qReject',860,410,{reject:true})],transitions:[tr('q0','X','X','R','q0'),tr('q0','0','X','R','qFind1'),tr('q0','Y','Y','R','qCheck'),tr('q0','1','1','S','qReject'),tr('q0','_','_','S','qAccept'),tr('qFind1','0','0','R','qFind1'),tr('qFind1','X','X','R','qFind1'),tr('qFind1','Y','Y','R','qFind1'),tr('qFind1','1','Y','L','qBack'),tr('qFind1','_','_','S','qReject'),tr('qBack','0','0','L','qBack'),tr('qBack','1','1','L','qBack'),tr('qBack','Y','Y','L','qBack'),tr('qBack','X','X','R','q0'),tr('qBack','_','_','R','q0'),tr('qCheck','Y','Y','R','qCheck'),tr('qCheck','_','_','S','qAccept'),tr('qCheck','0','0','S','qReject'),tr('qCheck','1','1','S','qReject')]}],
+    ['palindrome01',{name:'Intermedio · Reconoce palíndromos binarios',blank:'_',input:'0110',head:0,states:[st('q0',130,310,{start:true}),st('qR0',320,190,{}),st('qR1',320,430,{}),st('qM0',530,190,{}),st('qM1',530,430,{}),st('qBack',700,310,{}),st('qAccept',870,225,{accept:true}),st('qReject',870,410,{reject:true})],transitions:[tr('q0','X','X','R','q0'),tr('q0','Y','Y','R','q0'),tr('q0','0','X','R','qR0'),tr('q0','1','Y','R','qR1'),tr('q0','_','_','S','qAccept'),tr('qR0','0','0','R','qR0'),tr('qR0','1','1','R','qR0'),tr('qR0','X','X','R','qR0'),tr('qR0','Y','Y','R','qR0'),tr('qR0','_','_','L','qM0'),tr('qR1','0','0','R','qR1'),tr('qR1','1','1','R','qR1'),tr('qR1','X','X','R','qR1'),tr('qR1','Y','Y','R','qR1'),tr('qR1','_','_','L','qM1'),tr('qM0','X','X','L','qM0'),tr('qM0','Y','Y','L','qM0'),tr('qM0','0','X','L','qBack'),tr('qM0','1','1','S','qReject'),tr('qM0','_','_','S','qAccept'),tr('qM1','X','X','L','qM1'),tr('qM1','Y','Y','L','qM1'),tr('qM1','1','Y','L','qBack'),tr('qM1','0','0','S','qReject'),tr('qM1','_','_','S','qAccept'),tr('qBack','0','0','L','qBack'),tr('qBack','1','1','L','qBack'),tr('qBack','X','X','L','qBack'),tr('qBack','Y','Y','L','qBack'),tr('qBack','_','_','R','q0')]}]
+  ]},
+  {label:'Nivel avanzado: comparación y lenguajes no regulares más exigentes',items:[
+    ['wwReverse',{name:'Avanzado · Reconoce wwᴿ, palíndromos pares',blank:'_',input:'0110',head:0,states:[st('q0',130,310,{start:true}),st('qR0',320,190,{}),st('qR1',320,430,{}),st('qM0',530,190,{}),st('qM1',530,430,{}),st('qBack',700,310,{}),st('qAccept',870,225,{accept:true}),st('qReject',870,410,{reject:true})],transitions:[tr('q0','X','X','R','q0'),tr('q0','Y','Y','R','q0'),tr('q0','0','X','R','qR0'),tr('q0','1','Y','R','qR1'),tr('q0','_','_','S','qAccept'),tr('qR0','0','0','R','qR0'),tr('qR0','1','1','R','qR0'),tr('qR0','X','X','R','qR0'),tr('qR0','Y','Y','R','qR0'),tr('qR0','_','_','L','qM0'),tr('qR1','0','0','R','qR1'),tr('qR1','1','1','R','qR1'),tr('qR1','X','X','R','qR1'),tr('qR1','Y','Y','R','qR1'),tr('qR1','_','_','L','qM1'),tr('qM0','X','X','L','qM0'),tr('qM0','Y','Y','L','qM0'),tr('qM0','0','X','L','qBack'),tr('qM0','1','1','S','qReject'),tr('qM0','_','_','S','qReject'),tr('qM1','X','X','L','qM1'),tr('qM1','Y','Y','L','qM1'),tr('qM1','1','Y','L','qBack'),tr('qM1','0','0','S','qReject'),tr('qM1','_','_','S','qReject'),tr('qBack','0','0','L','qBack'),tr('qBack','1','1','L','qBack'),tr('qBack','X','X','L','qBack'),tr('qBack','Y','Y','L','qBack'),tr('qBack','_','_','R','q0')]}],
+    ['wHashW',{name:'Avanzado · Reconoce w#w sobre {0,1}',blank:'_',input:'101#101',head:0,states:[st('q0',115,315,{start:true}),st('qSeekHash0',285,190,{}),st('qSeekHash1',285,440,{}),st('qFind0',470,190,{}),st('qFind1',470,440,{}),st('qReturn',650,315,{}),st('qCheckRight',785,315,{}),st('qAccept',915,230,{accept:true}),st('qReject',915,420,{reject:true})],transitions:[tr('q0','X','X','R','q0'),tr('q0','Y','Y','R','q0'),tr('q0','0','X','R','qSeekHash0'),tr('q0','1','Y','R','qSeekHash1'),tr('q0','#','#','R','qCheckRight'),tr('q0','_','_','S','qReject'),tr('qSeekHash0','0','0','R','qSeekHash0'),tr('qSeekHash0','1','1','R','qSeekHash0'),tr('qSeekHash0','X','X','R','qSeekHash0'),tr('qSeekHash0','Y','Y','R','qSeekHash0'),tr('qSeekHash0','#','#','R','qFind0'),tr('qSeekHash0','_','_','S','qReject'),tr('qSeekHash1','0','0','R','qSeekHash1'),tr('qSeekHash1','1','1','R','qSeekHash1'),tr('qSeekHash1','X','X','R','qSeekHash1'),tr('qSeekHash1','Y','Y','R','qSeekHash1'),tr('qSeekHash1','#','#','R','qFind1'),tr('qSeekHash1','_','_','S','qReject'),tr('qFind0','A','A','R','qFind0'),tr('qFind0','B','B','R','qFind0'),tr('qFind0','0','A','L','qReturn'),tr('qFind0','1','1','S','qReject'),tr('qFind0','_','_','S','qReject'),tr('qFind1','A','A','R','qFind1'),tr('qFind1','B','B','R','qFind1'),tr('qFind1','1','B','L','qReturn'),tr('qFind1','0','0','S','qReject'),tr('qFind1','_','_','S','qReject'),tr('qReturn','0','0','L','qReturn'),tr('qReturn','1','1','L','qReturn'),tr('qReturn','A','A','L','qReturn'),tr('qReturn','B','B','L','qReturn'),tr('qReturn','#','#','L','qReturn'),tr('qReturn','X','X','L','qReturn'),tr('qReturn','Y','Y','L','qReturn'),tr('qReturn','_','_','R','q0'),tr('qCheckRight','A','A','R','qCheckRight'),tr('qCheckRight','B','B','R','qCheckRight'),tr('qCheckRight','0','0','S','qReject'),tr('qCheckRight','1','1','S','qReject'),tr('qCheckRight','_','_','S','qAccept')]}],
+    ['zeroOneTwo',{name:'Avanzado · Reconoce 0ⁿ1ⁿ2ⁿ',blank:'_',input:'001122',head:0,states:[st('q0',105,315,{start:true}),st('qFind1',295,190,{}),st('qFind2',500,190,{}),st('qBack',555,420,{}),st('qCheck',730,315,{}),st('qAccept',900,230,{accept:true}),st('qReject',900,420,{reject:true})],transitions:[tr('q0','X','X','R','q0'),tr('q0','0','X','R','qFind1'),tr('q0','Y','Y','R','qCheck'),tr('q0','Z','Z','R','qCheck'),tr('q0','1','1','S','qReject'),tr('q0','2','2','S','qReject'),tr('q0','_','_','S','qAccept'),tr('qFind1','0','0','R','qFind1'),tr('qFind1','X','X','R','qFind1'),tr('qFind1','Y','Y','R','qFind1'),tr('qFind1','1','Y','R','qFind2'),tr('qFind1','2','2','S','qReject'),tr('qFind1','Z','Z','S','qReject'),tr('qFind1','_','_','S','qReject'),tr('qFind2','1','1','R','qFind2'),tr('qFind2','Y','Y','R','qFind2'),tr('qFind2','Z','Z','R','qFind2'),tr('qFind2','2','Z','L','qBack'),tr('qFind2','0','0','S','qReject'),tr('qFind2','_','_','S','qReject'),tr('qBack','0','0','L','qBack'),tr('qBack','1','1','L','qBack'),tr('qBack','2','2','L','qBack'),tr('qBack','X','X','L','qBack'),tr('qBack','Y','Y','L','qBack'),tr('qBack','Z','Z','L','qBack'),tr('qBack','_','_','R','q0'),tr('qCheck','X','X','R','qCheck'),tr('qCheck','Y','Y','R','qCheck'),tr('qCheck','Z','Z','R','qCheck'),tr('qCheck','_','_','S','qAccept'),tr('qCheck','0','0','S','qReject'),tr('qCheck','1','1','S','qReject'),tr('qCheck','2','2','S','qReject')]}]
+  ]}
+];
+const presets={};
+presetGroups.forEach(g=>g.items.forEach(([key,value])=>presets[key]=value));
+
+function normalizeMachine(m){
+  m = clone(m || {});
+  const blank = m.blank || '_';
+  const states = (m.states||[]).map((x,i)=>({id:x.id||uid('s'), name:x.name||('q'+i), x:+x.x||200+i*120, y:+x.y||300, start:!!x.start, accept:!!x.accept, reject:!!x.reject}));
+  if(states.length && !states.some(s=>s.start)) states[0].start = true;
+  const transitions = (m.transitions||[]).map(t=>({id:t.id||uid('t'), from:t.from, read:(t.read ?? blank), write:(t.write ?? blank), move:['L','R','S'].includes(t.move)?t.move:'R', to:t.to}));
+  return {name:m.name||'Untitled TM', blank, input:m.input??'', head:Number.isFinite(+m.head)?+m.head:0, states, transitions};
+}
+function loadMachine(m){
+  machine = normalizeMachine(m);
+  selectedStateId = machine.states[0]?.id || null;
+  selectedTransitionId = null;
+  selectedPieceStateIds = new Set(); selectedPieceTransitionIds = new Set(); selectionMode = false; updateSelectionButtons();
+  $('blankInput').value = machine.blank;
+  $('tapeInput').value = machine.input || '';
+  $('headInput').value = machine.head || 0;
+  hidePopovers();
+  view={...baseView}; applyViewBox();
+  resetRun(false);
+  updateAll();
+}
+function loadPreset(key){ loadMachine(presets[key] || presets.unaryIncrement); }
+function newMachine(){ loadMachine({name:'New TM',blank:'_',input:'',head:0,states:[st('q0',300,310,{start:true}),st('qAccept',690,240,{accept:true}),st('qReject',690,410,{reject:true})],transitions:[]}); }
+
+function init(){
+  const sel=$('presetSelect');
+  sel.innerHTML='';
+  presetGroups.forEach(group=>{
+    const og=document.createElement('optgroup');
+    og.label=group.label;
+    group.items.forEach(([key,p])=>{ const o=document.createElement('option'); o.value=key; o.textContent=p.name; og.appendChild(o); });
+    sel.appendChild(og);
+  });
+  const saved=localStorage.getItem('simpleMouseTM');
+  if(saved){ try{ loadMachine(JSON.parse(saved)); toast('Loaded saved machine'); } catch(e){ loadPreset('unaryIncrement'); } }
+  else loadPreset('unaryIncrement');
+  bindEvents();
+}
+
+function bindEvents(){
+  $('loadPresetBtn').onclick=()=>loadPreset($('presetSelect').value);
+  $('newBtn').onclick=()=>{ if(confirm('Start a new empty machine?')) newMachine(); };
+  $('autoLayoutBtn').onclick=autoLayout;
+  $('batchTestBtn').onclick=showBatchPanel;
+  $('selectPieceBtn').onclick=togglePieceSelectionMode;
+  $('copyPieceBtn').onclick=copySelectedPiece;
+  $('pastePieceBtn').onclick=()=>pastePieceAtCenter();
+  $('clearPieceBtn').onclick=clearPieceSelection;
+  $('setTapeBtn').onclick=()=>{ machine.blank=$('blankInput').value||'_'; machine.input=$('tapeInput').value; machine.head=parseInt($('headInput').value,10)||0; resetRun(true); updateAll(); };
+  $('stepBtn').onclick=()=>stepRun();
+  $('backBtn').onclick=()=>backRun();
+  $('runBtn').onclick=startRun;
+  $('pauseBtn').onclick=pauseRun;
+  $('resetBtn').onclick=()=>{ pauseRun(); resetRun(true); updateAll(); };
+  $('speedSlider').oninput=()=>{ $('speedLabel').textContent=$('speedSlider').value+' ms'; if(timer){ pauseRun(); startRun(); } };
+  $('exportJsonBtn').onclick=exportJSON;
+  $('importJsonBtn').onclick=importJSON;
+  $('importJffBtn').onclick=()=>{ $('jffFileInput').value=''; $('jffFileInput').click(); };
+  $('jffFileInput').onchange=importJFLAPFile;
+  $('exportJffBtn').onclick=exportJFLAP;
+  $('downloadHtmlBtn').onclick=downloadSelf;
+  $('runBatchBtn').onclick=runBatchTests;
+  $('closeBatchBtn').onclick=hideBatchPanel;
+  $('fillBatchBtn').onclick=()=>{ $('batchInput').value=($('tapeInput').value||machine.input||'ε'); };
+  $('saveStateBtn').onclick=saveStatePopover;
+  $('setStartBtn').onclick=()=>{ setStart(selectedStateId); hideStatePopover(); };
+  $('deleteStateBtn').onclick=()=>deleteSelectedState();
+  $('closeStatePopoverBtn').onclick=hideStatePopover;
+  $('saveTransitionBtn').onclick=()=>{ saveTransitionPopover(); hideTransitionPopover(); };
+  $('deleteTransitionBtn').onclick=deleteSelectedTransition;
+  $('closeTransitionPopoverBtn').onclick=hideTransitionPopover;
+  $('editRead').oninput=liveUpdateTransition;
+  $('editWrite').oninput=liveUpdateTransition;
+  $('editMove').onchange=liveUpdateTransition;
+  document.querySelectorAll('.dirGrid .choiceBtn').forEach(btn=>btn.onclick=()=>{ $('editMove').value=btn.dataset.dir; liveUpdateTransition(); });
+  svg.addEventListener('dblclick', onCanvasDoubleClick);
+  svg.addEventListener('wheel', onCanvasWheel, {passive:false});
+  svg.addEventListener('pointermove', onPointerMove);
+  svg.addEventListener('pointerup', onPointerUp);
+  svg.addEventListener('pointerleave', onPointerUp);
+  svg.addEventListener('pointerdown', onCanvasPointerDown);
+  applyViewBox();
+  window.addEventListener('keydown', e=>{
+    const activeTag=document.activeElement?.tagName;
+    const editing=['INPUT','TEXTAREA','SELECT'].includes(activeTag);
+    if(!editing && (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='c'){ e.preventDefault(); copySelectedPiece(); return; }
+    if(!editing && (e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='v'){ e.preventDefault(); pastePieceAtCenter(); return; }
+    if(e.key==='s' && !editing){ e.preventDefault(); togglePieceSelectionMode(); return; }
+    if(e.key==='Delete' || e.key==='Backspace'){
+      if(document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+      if(selectedTransitionId) deleteSelectedTransition(); else if(selectedStateId) deleteSelectedState();
+    }
+    if(e.key==='Escape'){ hidePopovers(); selectedTransitionId=null; updateAll(); }
+  });
+}
+
+function applyViewBox(){ svg.setAttribute('viewBox',`${view.x} ${view.y} ${view.w} ${view.h}`); }
+function zoomAt(clientX,clientY,factor){
+  const before=svgPoint({clientX,clientY});
+  const newW=clamp(view.w*factor,260,2300);
+  const newH=newW*(baseView.h/baseView.w);
+  view.w=newW; view.h=newH; applyViewBox();
+  const after=svgPoint({clientX,clientY});
+  view.x += before.x-after.x; view.y += before.y-after.y; applyViewBox();
+}
+function zoomAtCenter(factor){ const r=svg.getBoundingClientRect(); zoomAt(r.left+r.width/2,r.top+r.height/2,factor); }
+function onCanvasWheel(e){ e.preventDefault(); zoomAt(e.clientX,e.clientY,e.deltaY>0?1.12:0.88); }
+function onCanvasPointerDown(e){
+  if(e.target!==svg) return;
+  selectedStateId=null; selectedTransitionId=null; hidePopovers(); updateAll(false);
+  if(selectionMode || e.shiftKey){
+    const p=svgPoint(e);
+    selectionDrag={startX:p.x,startY:p.y,endX:p.x,endY:p.y};
+    updateSelectionRect();
+    selectionRectEl.style.display='block';
+    svg.setPointerCapture?.(e.pointerId);
+    return;
+  }
+  panDrag={clientX:e.clientX,clientY:e.clientY,moved:false};
+  canvasCard.classList.add('panning');
+  svg.setPointerCapture?.(e.pointerId);
+}
+function svgPoint(evt){ const pt=svg.createSVGPoint(); pt.x=evt.clientX; pt.y=evt.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()); }
+function clamp(n,min,max){ return Math.max(min,Math.min(max,n)); }
+function stateById(id){ return machine.states.find(s=>s.id===id); }
+function stateByName(name){ return machine.states.find(s=>s.name===name); }
+function transitionById(id){ return machine.transitions.find(t=>t.id===id); }
+function nameToId(name){ return stateByName(name)?.id || null; }
+function uniqueStateName(){ let n=machine.states.length, name='q'+n; while(machine.states.some(s=>s.name===name)){ n++; name='q'+n; } return name; }
+function getEventStateId(evt){ const el=document.elementFromPoint(evt.clientX,evt.clientY); const g=el?.closest?.('[data-state-id]'); return g?.dataset?.stateId || null; }
+
+function onCanvasDoubleClick(e){
+  if(selectionMode) return;
+  if(e.target.closest && e.target.closest('[data-state-id], [data-edge-id]')) return;
+  const p=svgPoint(e);
+  addStateAt(p.x,p.y,e.clientX,e.clientY);
+}
+function addStateAt(x,y,clientX,clientY){
+  const name=uniqueStateName();
+  const state={id:uid('s'),name,x:clamp(x,70,930),y:clamp(y,80,540),start:machine.states.length===0,accept:false,reject:false};
+  machine.states.push(state); selectedStateId=state.id; selectedTransitionId=null; resetRun(false); updateAll(); showStatePopover(state,clientX,clientY); toast('Added state '+name);
+}
+function onStatePointerDown(e,stateId){
+  e.stopPropagation();
+  selectedStateId=stateId; selectedTransitionId=null; hideTransitionPopover();
+  const p=svgPoint(e); const state=stateById(stateId);
+  stateDrag={id:stateId, dx:p.x-state.x, dy:p.y-state.y, moved:false};
+  updateAll();
+}
+function onHandlePointerDown(e,stateId){
+  e.stopPropagation();
+  const s=stateById(stateId); if(!s) return;
+  selectedStateId=stateId; selectedTransitionId=null; hidePopovers();
+  const p=svgPoint(e);
+  connectDrag={source:stateId,startX:s.x,startY:s.y,endX:p.x,endY:p.y};
+  tempLine.style.display='block';
+  updateTempLine(p.x,p.y);
+}
+function onPointerMove(e){
+  if(selectionDrag){ const p=svgPoint(e); selectionDrag.endX=p.x; selectionDrag.endY=p.y; updateSelectionRect(); return; }
+  if(panDrag){
+    const rect=svg.getBoundingClientRect();
+    const dx=(e.clientX-panDrag.clientX)*view.w/rect.width;
+    const dy=(e.clientY-panDrag.clientY)*view.h/rect.height;
+    if(Math.abs(e.clientX-panDrag.clientX)+Math.abs(e.clientY-panDrag.clientY)>2) panDrag.moved=true;
+    view.x-=dx; view.y-=dy; panDrag.clientX=e.clientX; panDrag.clientY=e.clientY; applyViewBox(); return;
+  }
+  const p=svgPoint(e);
+  if(connectDrag){ updateTempLine(p.x,p.y); return; }
+  if(stateDrag){
+    const s=stateById(stateDrag.id); if(!s) return;
+    s.x=clamp(p.x-stateDrag.dx,60,940); s.y=clamp(p.y-stateDrag.dy,70,550); stateDrag.moved=true; hideStatePopover(); updateGraph();
+  }
+}
+function onPointerUp(e){
+  if(selectionDrag){ finalizePieceSelection(); selectionDrag=null; selectionRectEl.style.display='none'; updateAll(false); return; }
+  if(panDrag){ panDrag=null; canvasCard.classList.remove('panning'); return; }
+  if(connectDrag){
+    tempLine.style.display='none';
+    const sourceId=connectDrag.source; const targetId=getEventStateId(e);
+    connectDrag=null;
+    if(targetId){ createTransitionByDrag(sourceId,targetId,e.clientX,e.clientY); }
+    updateAll(); return;
+  }
+  if(stateDrag){
+    const s=stateById(stateDrag.id); const moved=stateDrag.moved; stateDrag=null;
+    if(s && !moved) showStatePopover(s,e.clientX,e.clientY);
+    updateAll();
+  }
+}
+function updateTempLine(x,y){
+  if(!connectDrag) return;
+  tempLine.setAttribute('d',`M ${connectDrag.startX} ${connectDrag.startY} L ${x} ${y}`);
+}
+
+function createTransitionByDrag(sourceId,targetId,clientX,clientY){
+  const from=stateById(sourceId), to=stateById(targetId); if(!from||!to) return;
+  const t={id:uid('t'),from:from.name,read:machine.blank,write:machine.blank,move:'R',to:to.name};
+  machine.transitions.push(t); selectedTransitionId=t.id; selectedStateId=null;
+  resetRun(false); updateAll(); showTransitionPopover(t,clientX,clientY); toast(`Transition ${from.name} → ${to.name} added`);
+}
+
+function setStart(id){
+  const s=stateById(id); if(!s) return;
+  machine.states.forEach(x=>x.start=x.id===id); resetRun(true); updateAll(); toast('Start state set to '+s.name);
+}
+function saveStatePopover(){
+  const s=stateById(selectedStateId); if(!s) return;
+  const newName=($('stateNameInput').value||'').trim();
+  if(!newName) return toast('State name cannot be empty');
+  if(machine.states.some(x=>x.name===newName && x.id!==s.id)) return toast('Another state already has that name');
+  const oldName=s.name; s.name=newName;
+  const type=$('stateTypeSelect').value;
+  s.accept=type==='accept'; s.reject=type==='reject';
+  machine.transitions.forEach(t=>{ if(t.from===oldName)t.from=newName; if(t.to===oldName)t.to=newName; });
+  resetRun(false); updateAll(); toast('State updated');
+}
+function deleteSelectedState(){
+  const s=stateById(selectedStateId); if(!s) return;
+  if(machine.states.length<=1) return toast('Keep at least one state');
+  if(!confirm('Delete state '+s.name+' and its transitions?')) return;
+  machine.states=machine.states.filter(x=>x.id!==s.id);
+  machine.transitions=machine.transitions.filter(t=>t.from!==s.name && t.to!==s.name);
+  if(s.start && machine.states[0]) machine.states[0].start=true;
+  selectedStateId=machine.states[0]?.id||null; selectedTransitionId=null; hidePopovers(); resetRun(true); updateAll();
+}
+function deleteSelectedTransition(){
+  if(!selectedTransitionId) return;
+  machine.transitions=machine.transitions.filter(t=>t.id!==selectedTransitionId);
+  selectedTransitionId=null; hideTransitionPopover(); resetRun(false); updateAll(); toast('Transition deleted');
+}
+function liveUpdateTransition(){
+  const t=transitionById(selectedTransitionId); if(!t) return;
+  t.read=($('editRead').value||machine.blank).trim();
+  t.write=($('editWrite').value||machine.blank).trim();
+  t.move=$('editMove').value;
+  resetRun(false); updateAll(false);
+}
+function saveTransitionPopover(){ liveUpdateTransition(); toast('Transition saved'); }
+
+function showStatePopover(state,clientX,clientY){
+  selectedStateId=state.id; selectedTransitionId=null;
+  const p=$('statePopover'); $('stateTitle').textContent='State '+state.name;
+  $('stateNameInput').value=state.name;
+  $('stateTypeSelect').value=state.accept?'accept':state.reject?'reject':'normal';
+  placePopover(p,clientX,clientY); p.classList.add('show');
+}
+function hideStatePopover(){ $('statePopover').classList.remove('show'); }
+function showTransitionPopover(t,clientX,clientY){
+  selectedTransitionId=t.id; selectedStateId=null;
+  $('transitionTitle').textContent='Transition '+t.from+' → '+t.to;
+  $('transitionSub').textContent=`δ(${t.from}, ${t.read}) = (${t.to}, ${t.write}, ${t.move})`;
+  $('editRead').value=t.read; $('editWrite').value=t.write; $('editMove').value=t.move;
+  renderSymbolGrids();
+  placePopover($('transitionPopover'),clientX,clientY); $('transitionPopover').classList.add('show');
+}
+function hideTransitionPopover(){ $('transitionPopover').classList.remove('show'); }
+function hidePopovers(){ hideStatePopover(); hideTransitionPopover(); }
+function placePopover(pop,clientX,clientY){
+  const rect=canvasCard.getBoundingClientRect();
+  let x=clientX-rect.left+12, y=clientY-rect.top+12;
+  const width=Math.min(430,rect.width-28); pop.style.width=width+'px';
+  x=clamp(x,14,rect.width-width-14); y=clamp(y,14,rect.height-220);
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+}
+function renderSymbolGrids(){
+  renderSymbolGridFor('read');
+  renderSymbolGridFor('write');
+}
+function renderSymbolGridFor(kind){
+  const grid=$(kind==='read'?'readSymbolGrid':'writeSymbolGrid');
+  grid.innerHTML='';
+  const current=kind==='read'?$('editRead').value:$('editWrite').value;
+  symbolPalette().forEach(sym=>{
+    const b=document.createElement('button');
+    b.className='choiceBtn'+(sym===current?' selected':'');
+    b.textContent=sym===machine.blank?'blank':sym;
+    b.title=sym;
+    b.onclick=()=>{
+      if(kind==='read') $('editRead').value=sym; else $('editWrite').value=sym;
+      liveUpdateTransition(); renderSymbolGrids();
+    };
+    grid.appendChild(b);
+  });
+}
+function symbolPalette(){
+  const base=[machine.blank,'0','1','a','b','X','Y','Z'];
+  const used=[]; machine.transitions.forEach(t=>used.push(t.read,t.write));
+  ($('tapeInput').value||machine.input||'').split('').forEach(c=>used.push(c));
+  return [...new Set([...base,...used].filter(x=>x!==undefined && x!==''))];
+}
+
+function updateAll(updateExplanation=true){
+  updateGraph(); updateRules(); renderTape(); updateStatus(updateExplanation); validateMachine(); localStorage.setItem('simpleMouseTM',JSON.stringify(machine));
+}
+function updateGraph(){
+  edgeLayer.innerHTML=''; stateLayer.innerHTML='';
+  drawStartArrow(); drawEdges(); machine.states.forEach(drawState);
+}
+function drawStartArrow(){
+  const s=machine.states.find(x=>x.start); if(!s) return;
+  const path=document.createElementNS(NS,'path'); path.setAttribute('d',`M ${s.x-110} ${s.y} L ${s.x-radius-8} ${s.y}`); path.setAttribute('class','startArrow'); path.setAttribute('marker-end','url(#arrowPrimary)'); edgeLayer.appendChild(path);
+}
+function edgeGroups(){
+  const map=new Map();
+  machine.transitions.forEach(t=>{ const key=t.from+'→'+t.to; if(!map.has(key))map.set(key,[]); map.get(key).push(t); });
+  return [...map.values()];
+}
+function drawEdges(){ edgeGroups().forEach(drawEdgeGroup); }
+function drawEdgeGroup(list){
+  const first=list[0]; const from=stateByName(first.from), to=stateByName(first.to); if(!from||!to)return;
+  const active=list.some(t=>t.id===run?.lastTransitionId); const selected=list.some(t=>t.id===selectedTransitionId); const pieceSelected=list.some(t=>selectedPieceTransitionIds.has(t.id)); const outgoing=run?.state===from.name;
+  const g=document.createElementNS(NS,'g'); g.dataset.edgeId=first.id; g.style.cursor='pointer';
+  let d,labelX,labelY;
+  if(from.name===to.name){
+    d=`M ${from.x-12} ${from.y-radius-3} C ${from.x-90} ${from.y-115}, ${from.x+90} ${from.y-115}, ${from.x+12} ${from.y-radius-3}`; labelX=from.x; labelY=from.y-118;
+  } else {
+    const dx=to.x-from.x, dy=to.y-from.y, dist=Math.hypot(dx,dy)||1;
+    const ux=dx/dist, uy=dy/dist, nx=-uy, ny=ux;
+    const curvature=42*(from.name<to.name?1:-1);
+    const sx=from.x+ux*(radius+8), sy=from.y+uy*(radius+8), ex=to.x-ux*(radius+8), ey=to.y-uy*(radius+8);
+    const mx=(sx+ex)/2+nx*curvature, my=(sy+ey)/2+ny*curvature;
+    d=`M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`; labelX=mx; labelY=my-8;
+  }
+  const path=document.createElementNS(NS,'path'); path.setAttribute('d',d); path.setAttribute('marker-end',active?'url(#arrowActive)':'url(#arrow)'); path.setAttribute('class','svgEdge'+(active?' active':'')+(selected?' selected':'')+(pieceSelected?' pieceSelected':'')+(outgoing?' outgoing':'')); g.appendChild(path);
+  const txt=document.createElementNS(NS,'text'); txt.setAttribute('x',labelX); txt.setAttribute('y',labelY); txt.setAttribute('text-anchor','middle'); txt.setAttribute('class','edgeLabel'+(active?' active':'')+(pieceSelected?' pieceSelected':''));
+  list.forEach((t,i)=>{ const sp=document.createElementNS(NS,'tspan'); sp.setAttribute('x',labelX); sp.setAttribute('dy',i===0?'0':'15'); sp.textContent=`${t.read}→${t.write},${t.move}`; txt.appendChild(sp); });
+  g.appendChild(txt);
+  g.addEventListener('click',e=>{ e.stopPropagation(); const t=list.find(x=>x.id===selectedTransitionId)||list.find(x=>x.id===run?.lastTransitionId)||list[0]; showTransitionPopover(t,e.clientX,e.clientY); updateAll(false); });
+  edgeLayer.appendChild(g);
+}
+function drawState(s){
+  const g=document.createElementNS(NS,'g'); g.dataset.stateId=s.id;
+  const c=document.createElementNS(NS,'circle'); c.setAttribute('cx',s.x); c.setAttribute('cy',s.y); c.setAttribute('r',radius);
+  let cls='stateCircle'; if(s.start)cls+=' start'; if(s.accept)cls+=' accept'; if(s.reject)cls+=' reject'; if(s.name===run?.state)cls+=' current'; if(s.name===blinkStateName)cls+=' selfBlink'; if(selectedPieceStateIds.has(s.id))cls+=' pieceSelected'; if(s.id===selectedStateId)cls+=' selected'; c.setAttribute('class',cls); g.appendChild(c);
+  if(s.accept||s.reject){ const c2=document.createElementNS(NS,'circle'); c2.setAttribute('cx',s.x); c2.setAttribute('cy',s.y); c2.setAttribute('r',radius-7); c2.setAttribute('fill','none'); c2.setAttribute('stroke',s.accept?'#16a34a':'#dc2626'); c2.setAttribute('stroke-width','2'); g.appendChild(c2); }
+  const label=document.createElementNS(NS,'text'); label.setAttribute('x',s.x); label.setAttribute('y',s.y+4); label.setAttribute('text-anchor','middle'); label.setAttribute('class','stateLabel'); label.textContent=s.name; g.appendChild(label);
+  const meta=[]; if(s.start)meta.push('start'); if(s.accept)meta.push('accept'); if(s.reject)meta.push('reject');
+  const m=document.createElementNS(NS,'text'); m.setAttribute('x',s.x); m.setAttribute('y',s.y+23); m.setAttribute('text-anchor','middle'); m.setAttribute('class','stateMeta'); m.textContent=meta.join(' · '); g.appendChild(m);
+  const h=document.createElementNS(NS,'circle'); h.setAttribute('cx',s.x+30); h.setAttribute('cy',s.y-30); h.setAttribute('r',9); h.setAttribute('class','transitionHandle'); h.addEventListener('pointerdown',e=>onHandlePointerDown(e,s.id)); g.appendChild(h);
+  g.addEventListener('pointerdown',e=>{ if(e.target.classList.contains('transitionHandle')) return; onStatePointerDown(e,s.id); });
+  g.addEventListener('dblclick',e=>{ e.stopPropagation(); setStart(s.id); });
+  stateLayer.appendChild(g);
+}
+
+function validateMachine(){
+  const badge=$('validationBadge'); if(!badge) return;
+  const keys=new Map(); let dup=false, dangling=false;
+  machine.transitions.forEach(t=>{
+    if(!stateByName(t.from)||!stateByName(t.to)) dangling=true;
+    const k=t.from+'|'+t.read; if(keys.has(k)) dup=true; else keys.set(k,t.id);
+  });
+  if(dangling){ badge.textContent='dangling rule'; badge.className='badge bad'; }
+  else if(dup){ badge.textContent='nondeterministic'; badge.className='badge warn'; }
+  else { badge.textContent='deterministic'; badge.className='badge good'; }
+}
+function updateRules(){
+  const body=$('rulesBody'); if(!body) return;
+  if(!machine.transitions.length){ body.innerHTML='<div class="miniHelp">No transitions yet. Drag the blue dot on one state to another state to create one.</div>'; return; }
+  const keyCounts={}; machine.transitions.forEach(t=>{ const k=t.from+'|'+t.read; keyCounts[k]=(keyCounts[k]||0)+1; });
+  let html='<table><tbody>';
+  machine.transitions.forEach((t,i)=>{
+    const active=t.id===run?.lastTransitionId; const dup=keyCounts[t.from+'|'+t.read]>1;
+    html+=`<tr class="ruleRow${active?' active':''}${dup?' duplicate':''}" data-rule="${t.id}"><td>${i+1}</td><td class="ruleCode">δ(${esc(t.from)}, ${esc(t.read)}) = (${esc(t.to)}, ${esc(t.write)}, ${esc(t.move)})</td></tr>`;
+  });
+  html+='</tbody></table>';
+  body.innerHTML=html;
+  body.querySelectorAll('[data-rule]').forEach(row=>row.onclick=e=>{ const t=transitionById(row.dataset.rule); if(t) showTransitionPopover(t,window.innerWidth-440,120); updateAll(false); });
+}
+function esc(x){ return String(x).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function tapeObjFromInput(input){ const tape={}; [...input].forEach((ch,i)=>{ if(ch!==machine.blank) tape[i]=ch; }); return tape; }
+function readTape(pos){ return run.tape[pos] ?? machine.blank; }
+function writeTape(pos,sym){ if(sym===machine.blank || sym==='') delete run.tape[pos]; else run.tape[pos]=sym; }
+function snapshot(){ return {state:run.state,head:run.head,tape:clone(run.tape),status:run.status,step:run.step,lastTransitionId:run.lastTransitionId,explanation:run.explanation,log:run.log.slice()}; }
+function restore(s){ Object.assign(run,{state:s.state,head:s.head,tape:clone(s.tape),status:s.status,step:s.step,lastTransitionId:s.lastTransitionId,explanation:s.explanation,log:s.log.slice()}); }
+function resetRun(showMsg){
+  const start=machine.states.find(s=>s.start)||machine.states[0];
+  run={state:start?.name||'',head:parseInt($('headInput').value,10)||0,tape:tapeObjFromInput($('tapeInput').value||''),status:'ready',step:0,lastTransitionId:null,history:[],log:[],explanation:showMsg?'Machine reset. Press Step to start.':'Ready. Build a machine with the mouse, set an input tape, then press Step.'};
+  if(start?.accept) run.status='accept'; if(start?.reject) run.status='reject';
+}
+function stepRun(){
+  if(!run) resetRun(false);
+  if(['accept','reject','halt','error'].includes(run.status)){ updateAll(); return; }
+  const state=stateByName(run.state);
+  if(!state){ run.status='error'; run.explanation='The current state does not exist.'; updateAll(); return; }
+  if(state.accept){ run.status='accept'; run.explanation=`Machine is already in accepting state ${state.name}.`; updateAll(); return; }
+  if(state.reject){ run.status='reject'; run.explanation=`Machine is already in rejecting state ${state.name}.`; updateAll(); return; }
+  const read=readTape(run.head);
+  const matches=machine.transitions.filter(t=>t.from===state.name && t.read===read);
+  run.history.push(snapshot());
+  if(matches.length===0){
+    run.status='halt'; run.lastTransitionId=null; run.explanation=`No rule matches state ${state.name} reading ${read}. The machine halts.`; run.log.push(`Step ${run.step}: HALT at ${state.name}, read ${read}`); updateAll(); return;
+  }
+  if(matches.length>1){
+    run.status='error'; run.lastTransitionId=null; run.explanation=`More than one rule matches (${state.name}, ${read}). This is nondeterministic.`; run.log.push(`Step ${run.step}: ERROR duplicate rule for (${state.name}, ${read})`); updateAll(); return;
+  }
+  const t=matches[0]; const oldHead=run.head;
+  writeTape(run.head,t.write);
+  if(t.move==='R') run.head++; else if(t.move==='L') run.head--;
+  run.state=t.to; run.step++; run.lastTransitionId=t.id; run.status='ready';
+  const newState=stateByName(run.state);
+  if(newState?.accept) run.status='accept'; if(newState?.reject) run.status='reject';
+  run.explanation=`At state ${t.from}, the head read ${read}. The machine used δ(${t.from}, ${t.read}) = (${t.to}, ${t.write}, ${t.move}): it wrote ${t.write}, moved ${moveWord(t.move)} from cell ${oldHead}, and entered ${t.to}.`;
+  run.log.push(`Step ${run.step}: δ(${t.from}, ${t.read}) → (${t.to}, ${t.write}, ${t.move}); head ${oldHead}→${run.head}`);
+  if(t.from===t.to) triggerStateBlink(t.to);
+  updateAll();
+  if(['accept','reject','halt','error'].includes(run.status)) pauseRun();
+}
+function backRun(){
+  if(!run.history.length) return toast('No previous step');
+  const prev=run.history.pop(); restore(prev); updateAll();
+}
+function startRun(){ if(timer) return; run.status='running'; updateAll(false); timer=setInterval(()=>stepRun(),parseInt($('speedSlider').value,10)); }
+function pauseRun(){ if(timer){ clearInterval(timer); timer=null; } if(run?.status==='running') run.status='ready'; updateAll(false); }
+function triggerStateBlink(stateName){ blinkStateName=stateName; clearTimeout(blinkTimer); blinkTimer=setTimeout(()=>{ blinkStateName=null; updateGraph(); },1450); }
+function moveWord(m){ return m==='R'?'right':m==='L'?'left':'nowhere'; }
+function renderTape(){
+  const tape=$('tape'); tape.innerHTML=''; if(!run) return;
+  const positions=Object.keys(run.tape).map(Number); let min=Math.min(run.head-8,0,...positions), max=Math.max(run.head+8,12,...positions);
+  for(let i=min;i<=max;i++){
+    const cell=document.createElement('div'); cell.className='cell'+(i===run.head?' head':''); const idx=document.createElement('span'); idx.className='idx'; idx.textContent=i; cell.appendChild(idx); const val=document.createElement('span'); val.textContent=readTape(i); cell.appendChild(val); tape.appendChild(cell);
+  }
+  setTimeout(()=>{ tape.querySelector('.head')?.scrollIntoView({block:'nearest',inline:'center'}); },0);
+}
+function updateStatus(updateExplanation=true){
+  const dot=$('runDot'), text=$('statusText'); dot.className='dot';
+  const s=run?.status||'ready';
+  if(s==='running') dot.classList.add('run'); if(['halt','accept','reject'].includes(s)) dot.classList.add('halt'); if(s==='error') dot.classList.add('err');
+  text.textContent = s==='ready'?'Ready':s==='running'?'Running':s==='accept'?'Accepted':s==='reject'?'Rejected':s==='halt'?'Halted':'Error';
+  $('stepCounter').textContent='Step '+(run?.step||0)+' · state '+(run?.state||'—')+' · head '+(run?.head??0);
+  if(updateExplanation) $('explanation').textContent=run?.explanation||'';
+  const logEl=$('log');
+  if(logEl){ logEl.innerHTML=(run?.log||[]).map(x=>'<div>'+esc(x)+'</div>').join(''); logEl.scrollTop=logEl.scrollHeight; }
+}
+
+
+function updateSelectionButtons(){
+  const b=$('selectPieceBtn');
+  if(!b) return;
+  b.textContent = selectionMode ? 'Selecting: drag rectangle' : 'Select piece';
+  b.classList.toggle('active', selectionMode);
+}
+function togglePieceSelectionMode(){
+  selectionMode=!selectionMode;
+  hidePopovers();
+  updateSelectionButtons();
+  toast(selectionMode ? 'Drag a rectangle over the states you want to copy. Press S to leave selection mode.' : 'Selection mode off');
+}
+function clearPieceSelection(){
+  selectedPieceStateIds=new Set();
+  selectedPieceTransitionIds=new Set();
+  selectionMode=false;
+  selectionDrag=null;
+  if(selectionRectEl) selectionRectEl.style.display='none';
+  updateSelectionButtons();
+  updateAll(false);
+  toast('Piece selection cleared');
+}
+function updateSelectionRect(){
+  if(!selectionDrag || !selectionRectEl) return;
+  const x=Math.min(selectionDrag.startX,selectionDrag.endX);
+  const y=Math.min(selectionDrag.startY,selectionDrag.endY);
+  const w=Math.abs(selectionDrag.endX-selectionDrag.startX);
+  const h=Math.abs(selectionDrag.endY-selectionDrag.startY);
+  selectionRectEl.setAttribute('x',x);
+  selectionRectEl.setAttribute('y',y);
+  selectionRectEl.setAttribute('width',w);
+  selectionRectEl.setAttribute('height',h);
+}
+function finalizePieceSelection(){
+  if(!selectionDrag) return;
+  const x1=Math.min(selectionDrag.startX,selectionDrag.endX), x2=Math.max(selectionDrag.startX,selectionDrag.endX);
+  const y1=Math.min(selectionDrag.startY,selectionDrag.endY), y2=Math.max(selectionDrag.startY,selectionDrag.endY);
+  selectedPieceStateIds=new Set(machine.states.filter(s=>s.x>=x1 && s.x<=x2 && s.y>=y1 && s.y<=y2).map(s=>s.id));
+  const names=new Set(machine.states.filter(s=>selectedPieceStateIds.has(s.id)).map(s=>s.name));
+  selectedPieceTransitionIds=new Set(machine.transitions.filter(t=>names.has(t.from) && names.has(t.to)).map(t=>t.id));
+  selectionMode=false;
+  updateSelectionButtons();
+  if(selectedPieceStateIds.size===0) toast('No states selected. Try dragging a larger rectangle.');
+  else toast(`Selected ${selectedPieceStateIds.size} state(s) and ${selectedPieceTransitionIds.size} transition(s). Use Copy piece.`);
+}
+function copySelectedPiece(){
+  const states=machine.states.filter(s=>selectedPieceStateIds.has(s.id));
+  if(!states.length) return toast('Select a piece first: Machine ▾ → Select piece, then drag a rectangle.');
+  const transitions=machine.transitions.filter(t=>selectedPieceTransitionIds.has(t.id));
+  const minX=Math.min(...states.map(s=>s.x)), minY=Math.min(...states.map(s=>s.y));
+  clipboardPiece={
+    states:states.map(s=>({name:s.name,relX:s.x-minX,relY:s.y-minY,start:s.start,accept:s.accept,reject:s.reject})),
+    transitions:transitions.map(t=>({from:t.from,to:t.to,read:t.read,write:t.write,move:t.move}))
+  };
+  toast(`Copied piece: ${states.length} state(s), ${transitions.length} transition(s). Use Paste piece or Ctrl+V.`);
+}
+function pastePieceAtCenter(){
+  if(!clipboardPiece) return toast('No copied piece yet.');
+  const r=svg.getBoundingClientRect();
+  const p=svgPoint({clientX:r.left+r.width/2,clientY:r.top+r.height/2});
+  pastePieceAt(p.x,p.y);
+}
+function pastePieceAt(x,y){
+  const states=clipboardPiece.states||[];
+  if(!states.length) return toast('Copied piece is empty.');
+  const cx=states.reduce((a,s)=>a+s.relX,0)/states.length;
+  const cy=states.reduce((a,s)=>a+s.relY,0)/states.length;
+  const nameMap=new Map();
+  const newStateIds=new Set();
+  const newTransitionIds=new Set();
+  function nextCopyName(base){
+    let root=String(base).replace(/_copy\d*$/,'');
+    let candidate=root+'_copy', i=2;
+    while(machine.states.some(s=>s.name===candidate) || [...nameMap.values()].includes(candidate)){
+      candidate=root+'_copy'+i; i++;
+    }
+    return candidate;
+  }
+  states.forEach(old=>{
+    const newName=nextCopyName(old.name);
+    nameMap.set(old.name,newName);
+    const ns={id:uid('s'),name:newName,x:clamp(x+(old.relX-cx),60,940),y:clamp(y+(old.relY-cy),70,550),start:false,accept:!!old.accept,reject:!!old.reject};
+    machine.states.push(ns);
+    newStateIds.add(ns.id);
+  });
+  (clipboardPiece.transitions||[]).forEach(t=>{
+    if(!nameMap.has(t.from) || !nameMap.has(t.to)) return;
+    const nt={id:uid('t'),from:nameMap.get(t.from),to:nameMap.get(t.to),read:t.read,write:t.write,move:t.move};
+    machine.transitions.push(nt);
+    newTransitionIds.add(nt.id);
+  });
+  selectedPieceStateIds=newStateIds;
+  selectedPieceTransitionIds=newTransitionIds;
+  selectedStateId=null; selectedTransitionId=null; selectionMode=false; updateSelectionButtons();
+  resetRun(false);
+  updateAll(false);
+  toast(`Pasted piece with ${newStateIds.size} state(s) and ${newTransitionIds.size} transition(s).`);
+}
+
+
+function showBatchPanel(){
+  hidePopovers();
+  const panel=$('batchPanel');
+  if(!$('batchInput').value.trim()){
+    $('batchInput').value='ε\n'+($('tapeInput').value||machine.input||'01');
+  }
+  panel.classList.add('show');
+}
+function hideBatchPanel(){ $('batchPanel').classList.remove('show'); }
+function parseBatchInputs(){
+  const raw=$('batchInput').value.replace(/\r/g,'').split('\n');
+  const lines=raw.map(x=>x.trim()).filter(x=>x.length>0);
+  if(!lines.length) return [''];
+  return lines.map(x=>/^(ε|epsilon|lambda|empty)$/i.test(x)?'':x);
+}
+function runBatchTests(){
+  const inputs=parseBatchInputs();
+  const maxSteps=Math.max(1,parseInt($('batchMaxSteps').value,10)||10000);
+  const rows=inputs.map(input=>simulateMachineInput(input,maxSteps));
+  const html=['<table><thead><tr><th>Input</th><th>Result</th><th>Steps</th><th>Final state</th><th>Head</th><th>Reason</th></tr></thead><tbody>'];
+  rows.forEach(r=>{
+    const cls=r.status==='accept'?'resultAccept':r.status==='reject'?'resultReject':r.status==='halt'?'resultHalt':r.status==='limit'?'resultLimit':'resultError';
+    html.push(`<tr><td><code>${esc(r.input===''?'ε':r.input)}</code></td><td class="${cls}">${esc(resultLabel(r.status))}</td><td>${r.steps}</td><td><code>${esc(r.state||'—')}</code></td><td>${r.head}</td><td>${esc(r.reason)}</td></tr>`);
+  });
+  html.push('</tbody></table>');
+  $('batchResults').innerHTML=html.join('');
+  toast(`Batch finished: ${rows.length} input(s) tested.`);
+}
+function resultLabel(status){
+  return status==='accept'?'Accept':status==='reject'?'Reject':status==='halt'?'Halt':status==='limit'?'Step limit':'Error';
+}
+function simulateMachineInput(input,maxSteps){
+  const blank=machine.blank||'_';
+  const start=machine.states.find(s=>s.start)||machine.states[0];
+  if(!start) return {input,status:'error',steps:0,state:'',head:0,reason:'No start state exists.'};
+  const tape={};
+  [...input].forEach((ch,i)=>{ if(ch!==blank) tape[i]=ch; });
+  let state=start.name;
+  let head=parseInt($('headInput').value,10)||0;
+  let steps=0;
+  function read(){ return tape[head] ?? blank; }
+  function write(sym){ if(sym===blank || sym==='') delete tape[head]; else tape[head]=sym; }
+  while(steps<=maxSteps){
+    const stObj=machine.states.find(s=>s.name===state);
+    if(!stObj) return {input,status:'error',steps,state,head,reason:'Current state does not exist.'};
+    if(stObj.accept) return {input,status:'accept',steps,state,head,reason:'Reached accepting state.'};
+    if(stObj.reject) return {input,status:'reject',steps,state,head,reason:'Reached rejecting state.'};
+    if(steps===maxSteps) return {input,status:'limit',steps,state,head,reason:`Stopped after ${maxSteps} steps.`};
+    const symbol=read();
+    const matches=machine.transitions.filter(t=>t.from===state && t.read===symbol);
+    if(matches.length===0) return {input,status:'halt',steps,state,head,reason:`No transition for δ(${state}, ${symbol}).`};
+    if(matches.length>1) return {input,status:'error',steps,state,head,reason:`Nondeterministic transitions for δ(${state}, ${symbol}).`};
+    const t=matches[0];
+    write(t.write);
+    if(t.move==='R') head++;
+    else if(t.move==='L') head--;
+    state=t.to;
+    steps++;
+  }
+  return {input,status:'limit',steps,state,head,reason:`Stopped after ${maxSteps} steps.`};
+}
+
+function importJFLAPFile(e){
+  const file=e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const imported=parseJFLAP(reader.result,file.name);
+      loadMachine(imported);
+      toast(`Imported JFLAP machine: ${file.name}`);
+    }catch(err){
+      console.error(err);
+      toast('Could not import JFLAP: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+function parseJFLAP(xmlText,fileName='imported.jff'){
+  const doc=new DOMParser().parseFromString(xmlText,'application/xml');
+  if(doc.querySelector('parsererror')) throw new Error('invalid XML');
+  const type=(doc.querySelector('type')?.textContent||'').trim().toLowerCase();
+  if(type && !type.includes('turing')) throw new Error('the file is not a Turing-machine JFLAP file');
+  const stateEls=[...doc.querySelectorAll('automaton > state')];
+  if(!stateEls.length) throw new Error('no states found');
+  const idToState=new Map();
+  const states=stateEls.map((el,i)=>{
+    const jffId=el.getAttribute('id') ?? String(i);
+    const name=el.getAttribute('name') || ('q'+jffId);
+    const x=Number.parseFloat(el.querySelector('x')?.textContent);
+    const y=Number.parseFloat(el.querySelector('y')?.textContent);
+    const s={id:uid('s'),name,x:Number.isFinite(x)?x:160+i*90,y:Number.isFinite(y)?y:260+(i%3)*95,start:!!el.querySelector('initial'),accept:!!el.querySelector('final'),reject:false};
+    idToState.set(jffId,s);
+    return s;
+  });
+  if(!states.some(s=>s.start)) states[0].start=true;
+  const blank='_';
+  const transEls=[...doc.querySelectorAll('automaton > transition')];
+  const transitions=[];
+  for(const el of transEls){
+    const fromId=(el.querySelector('from')?.textContent||'').trim();
+    const toId=(el.querySelector('to')?.textContent||'').trim();
+    const from=idToState.get(fromId), to=idToState.get(toId);
+    if(!from || !to) continue;
+    let read=(el.querySelector('read')?.textContent ?? '');
+    let write=(el.querySelector('write')?.textContent ?? '');
+    let move=(el.querySelector('move')?.textContent || 'S').trim().toUpperCase();
+    if(read==='') read=blank;
+    if(write==='') write=blank;
+    if(move==='N') move='S';
+    if(!['L','R','S'].includes(move)) move='S';
+    transitions.push({id:uid('t'),from:from.name,to:to.name,read,write,move});
+  }
+  return {name:fileName.replace(/\.(jff|xml)$/i,''),blank,input:'',head:0,states,transitions};
+}
+
+function autoLayout(){
+  const n=machine.states.length; if(!n)return;
+  const cx=500, cy=310, r=Math.min(230,120+n*12);
+  machine.states.forEach((s,i)=>{ const a=(Math.PI*2*i/n)-Math.PI/2; s.x=cx+Math.cos(a)*r; s.y=cy+Math.sin(a)*r; });
+  hidePopovers(); updateAll();
+}
+function exportJSON(){ $('jsonArea').style.display='block'; $('jsonArea').value=JSON.stringify(machine,null,2); downloadText('turing_machine.json',$('jsonArea').value,'application/json'); }
+function importJSON(){
+  $('jsonArea').style.display='block';
+  const pasted=prompt('Paste machine JSON here, or cancel and paste it into the JSON box at the bottom.');
+  const raw=pasted || $('jsonArea').value;
+  if(!raw) return;
+  try{ loadMachine(JSON.parse(raw)); toast('Imported JSON'); } catch(e){ toast('Invalid JSON'); }
+}
+function exportJFLAP(){ downloadText('turing_machine.jff',toJFLAP(),'application/xml'); }
+function toJFLAP(){
+  const stateIds=new Map(); machine.states.forEach((s,i)=>stateIds.set(s.name,i));
+  const blank=machine.blank;
+  const statesXML=machine.states.map((s,i)=>`    <state id="${i}" name="${xml(s.name)}">\n      <x>${Math.round(s.x)}</x>\n      <y>${Math.round(s.y)}</y>\n      ${s.start?'<initial/>':''}\n      ${s.accept?'<final/>':''}\n    </state>`).join('\n');
+  const transXML=machine.transitions.map(t=>`    <transition>\n      <from>${stateIds.get(t.from)}</from>\n      <to>${stateIds.get(t.to)}</to>\n      <read>${t.read===blank?'':xml(t.read)}</read>\n      <write>${t.write===blank?'':xml(t.write)}</write>\n      <move>${xml(t.move)}</move>\n    </transition>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<structure>\n  <type>turing</type>\n  <automaton>\n${statesXML}\n${transXML}\n  </automaton>\n</structure>`;
+}
+function xml(x){ return String(x).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m])); }
+function downloadSelf(){ downloadText('turing_machine_jflap_batch.html',document.documentElement.outerHTML,'text/html'); }
+function downloadText(filename,text,type){ const blob=new Blob([text],{type}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},300); }
+
+init();
+})();
+</script>
+</body>
+</html>
